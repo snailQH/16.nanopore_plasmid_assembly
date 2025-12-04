@@ -79,10 +79,11 @@ jobs:
           echo "This may be due to jump host authentication. Continuing with deployment..."
         }
         
-    - name: Deploy to remote server
+    - name: Deploy to remote server via Git
       env:
         DEPLOY_PATH: /Users/qinghuili/AmpSeq/repository/16.nanopore_plasmid_assembly
-        SSH_CONFIG: ${{ env.HOME }}/.ssh/config
+        GIT_REPO_URL: git@github.com:snailQH/16.nanopore_plasmid_assembly.git
+        GIT_BRANCH: main
       run: |
         SSH_CONFIG="$HOME/.ssh/config"
         
@@ -92,39 +93,54 @@ jobs:
           exit 1
         fi
         
-        echo "Creating deployment directory on remote server..."
-        ssh -F "$SSH_CONFIG" target-server "mkdir -p $DEPLOY_PATH" || {
-          echo "Error: Failed to create directory"
+        echo "Checking remote server connection..."
+        ssh -F "$SSH_CONFIG" target-server "whoami" || {
+          echo "Error: Failed to connect to remote server"
           exit 1
         }
         
-        echo "Transferring files to remote server..."
-        rsync -avz --delete \
-          -e "ssh -F $SSH_CONFIG" \
-          --exclude '.git' \
-          --exclude '__pycache__' \
-          --exclude '*.pyc' \
-          --exclude '*.log' \
-          --exclude 'output/' \
-          --exclude 'results/' \
-          --exclude '.nextflow/' \
-          --exclude 'work/' \
-          --exclude '*.fasta' \
-          --exclude '*.fastq' \
-          --exclude '*.ab1' \
-          --exclude '*.pdf' \
-          --exclude '*.csv' \
-          --exclude '*.tsv' \
-          --exclude '*.yaml' \
-          --exclude 'config.yaml' \
-          --exclude '.DS_Store' \
-          --exclude '*.tmp' \
-          --exclude '*.temp' \
-          --exclude 'nanopore_plasmid_pipeline_v1.0.zip' \
-          ./ target-server:$DEPLOY_PATH/ || {
-          echo "Error: rsync failed"
-          exit 1
-        }
+        echo "Checking if deployment directory exists..."
+        DEPLOY_DIR_EXISTS=$(ssh -F "$SSH_CONFIG" target-server "test -d $DEPLOY_PATH && echo 'yes' || echo 'no'")
+        
+        if [ "$DEPLOY_DIR_EXISTS" = "yes" ]; then
+          echo "Directory exists. Checking if it's a git repository..."
+          IS_GIT_REPO=$(ssh -F "$SSH_CONFIG" target-server "cd $DEPLOY_PATH && git rev-parse --is-inside-work-tree 2>/dev/null && echo 'yes' || echo 'no'")
+          
+          if [ "$IS_GIT_REPO" = "yes" ]; then
+            echo "Git repository found. Pulling latest changes..."
+            ssh -F "$SSH_CONFIG" target-server \
+              "cd $DEPLOY_PATH && \
+               git fetch origin && \
+               git reset --hard origin/$GIT_BRANCH && \
+               git clean -fd" || {
+              echo "Error: git pull failed"
+              exit 1
+            }
+            echo "✓ Successfully pulled latest changes"
+          else
+            echo "Directory exists but is not a git repository. Removing and cloning..."
+            ssh -F "$SSH_CONFIG" target-server "rm -rf $DEPLOY_PATH" || {
+              echo "Warning: Failed to remove existing directory, but continuing..."
+            }
+            echo "Cloning repository..."
+            ssh -F "$SSH_CONFIG" target-server \
+              "mkdir -p $(dirname $DEPLOY_PATH) && \
+               git clone -b $GIT_BRANCH $GIT_REPO_URL $DEPLOY_PATH" || {
+              echo "Error: git clone failed"
+              exit 1
+            }
+            echo "✓ Successfully cloned repository"
+          fi
+        else
+          echo "Directory does not exist. Creating parent directory and cloning repository..."
+          ssh -F "$SSH_CONFIG" target-server \
+            "mkdir -p $(dirname $DEPLOY_PATH) && \
+             git clone -b $GIT_BRANCH $GIT_REPO_URL $DEPLOY_PATH" || {
+            echo "Error: git clone failed"
+            exit 1
+          }
+          echo "✓ Successfully cloned repository"
+        fi
         
         echo "Setting permissions on remote server..."
         ssh -F "$SSH_CONFIG" target-server \
@@ -133,4 +149,14 @@ jobs:
            echo 'Deployment completed successfully!'" || {
           echo "Warning: Permission setting failed, but deployment may have succeeded"
         }
+        
+        echo "Verifying deployment..."
+        COMMIT_HASH=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(ssh -F "$SSH_CONFIG" target-server "cd $DEPLOY_PATH && git rev-parse HEAD")
+        
+        if [ "$COMMIT_HASH" = "$REMOTE_COMMIT" ]; then
+          echo "✓ Deployment verified: Remote commit matches local commit ($COMMIT_HASH)"
+        else
+          echo "⚠ Warning: Remote commit ($REMOTE_COMMIT) differs from local commit ($COMMIT_HASH)"
+        fi
 
