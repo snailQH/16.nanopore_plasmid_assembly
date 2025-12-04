@@ -21,9 +21,20 @@ jobs:
         mkdir -p "$SSH_DIR"
         chmod 700 "$SSH_DIR"
         
-        # Save SSH private key
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > "$SSH_DIR/deploy_key"
+        # Save SSH private key (preserve exact format, including newlines)
+        # Use printf to ensure proper handling of newlines
+        printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > "$SSH_DIR/deploy_key"
         chmod 600 "$SSH_DIR/deploy_key"
+        
+        # Verify key format
+        echo "Checking SSH key format..."
+        if ! ssh-keygen -l -f "$SSH_DIR/deploy_key" > /dev/null 2>&1; then
+          echo "Error: Invalid SSH key format"
+          echo "Key file first 100 characters:"
+          head -c 100 "$SSH_DIR/deploy_key"
+          exit 1
+        fi
+        echo "SSH key format is valid"
         
         # Add jump host and target host to known_hosts (disable strict checking for CI)
         ssh-keyscan -H 8.133.18.117 >> "$SSH_DIR/known_hosts" 2>/dev/null || true
