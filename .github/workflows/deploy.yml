@@ -16,48 +16,80 @@ jobs:
       
     - name: Setup SSH
       run: |
-        mkdir -p ~/.ssh
-        chmod 700 ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-        chmod 600 ~/.ssh/deploy_key
+        # Create .ssh directory with absolute path
+        SSH_DIR="$HOME/.ssh"
+        mkdir -p "$SSH_DIR"
+        chmod 700 "$SSH_DIR"
         
-        # Add jump host (8.133.18.117) to known_hosts
-        ssh-keyscan -H 8.133.18.117 >> ~/.ssh/known_hosts 2>/dev/null || true
+        # Save SSH private key
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > "$SSH_DIR/deploy_key"
+        chmod 600 "$SSH_DIR/deploy_key"
         
-        # Add target host (localhost:2223) to known_hosts
-        # Note: We need to scan through the jump host, but ssh-keyscan doesn't support ProxyJump
-        # So we'll disable strict host key checking for this connection
-        echo "Host 8.133.18.117" >> ~/.ssh/config
-        echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-        echo "  UserKnownHostsFile ~/.ssh/known_hosts" >> ~/.ssh/config
-        echo "" >> ~/.ssh/config
-        echo "Host target-server" >> ~/.ssh/config
-        echo "  HostName localhost" >> ~/.ssh/config
-        echo "  Port 2223" >> ~/.ssh/config
-        echo "  User qinghuili" >> ~/.ssh/config
-        echo "  ProxyJump root@8.133.18.117" >> ~/.ssh/config
-        echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-        echo "  UserKnownHostsFile ~/.ssh/known_hosts" >> ~/.ssh/config
-        echo "  IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
-        chmod 600 ~/.ssh/config
+        # Add jump host and target host to known_hosts (disable strict checking for CI)
+        ssh-keyscan -H 8.133.18.117 >> "$SSH_DIR/known_hosts" 2>/dev/null || true
+        ssh-keyscan -p 2223 -H localhost >> "$SSH_DIR/known_hosts" 2>/dev/null || true
+        
+        # Create SSH config file with absolute path
+        SSH_CONFIG="$SSH_DIR/config"
+        cat > "$SSH_CONFIG" << 'EOF'
+        Host jump-host
+          HostName 8.133.18.117
+          User root
+          StrictHostKeyChecking no
+          UserKnownHostsFile ~/.ssh/known_hosts
+          IdentityFile ~/.ssh/deploy_key
+          ForwardAgent yes
+        
+        Host target-server
+          HostName localhost
+          Port 2223
+          User qinghuili
+          ProxyJump jump-host
+          StrictHostKeyChecking no
+          UserKnownHostsFile ~/.ssh/known_hosts
+          IdentityFile ~/.ssh/deploy_key
+        EOF
+        chmod 600 "$SSH_CONFIG"
+        
+        # Verify config file exists
+        if [ ! -f "$SSH_CONFIG" ]; then
+          echo "Error: SSH config file not created at $SSH_CONFIG"
+          exit 1
+        fi
+        
+        echo "SSH config file created at: $SSH_CONFIG"
+        echo "SSH config contents:"
+        cat "$SSH_CONFIG"
+        
+        # Test SSH connection (with verbose output for debugging)
+        echo "Testing SSH connection to target server..."
+        ssh -v -F "$SSH_CONFIG" target-server "echo 'SSH connection successful!'" || {
+          echo "Warning: SSH connection test failed"
+          echo "This may be due to jump host authentication. Continuing with deployment..."
+        }
         
     - name: Deploy to remote server
       env:
         DEPLOY_PATH: /Users/qinghuili/AmpSeq/repository/16.nanopore_plasmid_assembly
+        SSH_CONFIG: ${{ env.HOME }}/.ssh/config
       run: |
-        echo "Testing SSH connection..."
-        ssh -F ~/.ssh/config target-server "echo 'SSH connection successful!'" || {
-          echo "SSH connection test failed, but continuing..."
-        }
+        SSH_CONFIG="$HOME/.ssh/config"
+        
+        # Verify SSH config exists
+        if [ ! -f "$SSH_CONFIG" ]; then
+          echo "Error: SSH config file not found at $SSH_CONFIG"
+          exit 1
+        fi
         
         echo "Creating deployment directory on remote server..."
-        ssh -F ~/.ssh/config target-server "mkdir -p $DEPLOY_PATH" || {
-          echo "Failed to create directory, but continuing..."
+        ssh -F "$SSH_CONFIG" target-server "mkdir -p $DEPLOY_PATH" || {
+          echo "Error: Failed to create directory"
+          exit 1
         }
         
         echo "Transferring files to remote server..."
         rsync -avz --delete \
-          -e "ssh -F ~/.ssh/config" \
+          -e "ssh -F $SSH_CONFIG" \
           --exclude '.git' \
           --exclude '__pycache__' \
           --exclude '*.pyc' \
@@ -78,11 +110,16 @@ jobs:
           --exclude '*.tmp' \
           --exclude '*.temp' \
           --exclude 'nanopore_plasmid_pipeline_v1.0.zip' \
-          ./ target-server:$DEPLOY_PATH/
+          ./ target-server:$DEPLOY_PATH/ || {
+          echo "Error: rsync failed"
+          exit 1
+        }
         
         echo "Setting permissions on remote server..."
-        ssh -F ~/.ssh/config target-server \
+        ssh -F "$SSH_CONFIG" target-server \
           "chmod +x $DEPLOY_PATH/run_pipeline.sh 2>/dev/null || true; \
            find $DEPLOY_PATH/scripts -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true; \
-           echo 'Deployment completed successfully!'"
+           echo 'Deployment completed successfully!'" || {
+          echo "Warning: Permission setting failed, but deployment may have succeeded"
+        }
 
