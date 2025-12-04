@@ -1,0 +1,107 @@
+name: Deploy to Remote Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+        chmod 600 ~/.ssh/deploy_key
+        ssh-keyscan -p 2223 -H localhost >> ~/.ssh/known_hosts 2>/dev/null || true
+        
+    - name: Deploy to remote server
+      env:
+        SSH_JUMP_HOST: root@8.133.18.117
+        SSH_TARGET: qinghuili@localhost
+        SSH_PORT: 2223
+        DEPLOY_PATH: /Users/qinghuili/AmpSeq/repository/16.nanopore_plasmid_assembly
+      run: |
+        # Create deployment script
+        cat > /tmp/deploy.sh << 'DEPLOY_SCRIPT'
+        #!/bin/bash
+        set -e
+        
+        DEPLOY_PATH="$1"
+        
+        echo "Creating deployment directory: $DEPLOY_PATH"
+        mkdir -p "$DEPLOY_PATH"
+        
+        echo "Syncing files to remote server..."
+        rsync -avz --delete \
+          --exclude '.git' \
+          --exclude '__pycache__' \
+          --exclude '*.pyc' \
+          --exclude '*.log' \
+          --exclude 'output/' \
+          --exclude 'results/' \
+          --exclude '.nextflow/' \
+          --exclude 'work/' \
+          --exclude '*.fasta' \
+          --exclude '*.fastq' \
+          --exclude '*.ab1' \
+          --exclude '*.pdf' \
+          --exclude '*.csv' \
+          --exclude '*.tsv' \
+          --exclude '*.yaml' \
+          --exclude 'config.yaml' \
+          --exclude '.DS_Store' \
+          --exclude '*.tmp' \
+          --exclude '*.temp' \
+          ./ "$DEPLOY_PATH/"
+        
+        echo "Setting permissions..."
+        chmod +x "$DEPLOY_PATH/run_pipeline.sh" 2>/dev/null || true
+        find "$DEPLOY_PATH/scripts" -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+        
+        echo "Deployment completed successfully!"
+        echo "Deployed to: $DEPLOY_PATH"
+        DEPLOY_SCRIPT
+        
+        chmod +x /tmp/deploy.sh
+        
+        # Transfer files and execute deployment
+        echo "Transferring files to remote server..."
+        rsync -avz --delete \
+          -e "ssh -i ~/.ssh/deploy_key -o ProxyJump=$SSH_JUMP_HOST -p $SSH_PORT" \
+          --exclude '.git' \
+          --exclude '__pycache__' \
+          --exclude '*.pyc' \
+          --exclude '*.log' \
+          --exclude 'output/' \
+          --exclude 'results/' \
+          --exclude '.nextflow/' \
+          --exclude 'work/' \
+          --exclude '*.fasta' \
+          --exclude '*.fastq' \
+          --exclude '*.ab1' \
+          --exclude '*.pdf' \
+          --exclude '*.csv' \
+          --exclude '*.tsv' \
+          --exclude '*.yaml' \
+          --exclude 'config.yaml' \
+          --exclude '.DS_Store' \
+          --exclude '*.tmp' \
+          --exclude '*.temp' \
+          ./ "$SSH_TARGET:$DEPLOY_PATH/"
+        
+        echo "Setting permissions on remote server..."
+        ssh -i ~/.ssh/deploy_key \
+          -o ProxyJump="$SSH_JUMP_HOST" \
+          -p "$SSH_PORT" \
+          "$SSH_TARGET" \
+          "chmod +x $DEPLOY_PATH/run_pipeline.sh 2>/dev/null || true; \
+           find $DEPLOY_PATH/scripts -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true; \
+           echo 'Deployment completed successfully!'"
+
