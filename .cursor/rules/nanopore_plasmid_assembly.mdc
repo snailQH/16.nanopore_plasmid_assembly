@@ -1,0 +1,312 @@
+---
+alwaysApply: true
+---
+
+# Nanopore Plasmid Assembly Pipeline Rules
+
+## COMPLIANCE CONFIRMED
+
+**I will follow the nanopore plasmid assembly pipeline framework. All workflow steps, Docker integration, and report generation will reference this framework.**
+
+## Project Overview
+
+This project focuses on **nanopore-based plasmid sequencing analysis** using the epi2me wf-clone-validation workflow, followed by fragment splitting, AB1 file generation, and comprehensive report generation.
+
+## Core Principles
+
+### 1. Pipeline Architecture
+
+The pipeline follows a modular step-based architecture:
+
+- **Main Entry Script**: Unified entry point (`run_pipeline.py` or `main.sh`)
+- **Step 0**: Initialization and configuration (`step0_initialize_analysis.py`)
+- **Step 1-N**: Individual analysis steps (`step1_*.py`, `step2_*.py`, etc.)
+- **Result Generator**: Summary JSON generator (`generate_result_json.py`)
+- **Visualization**: Plot generation (`generate_visualizations.py`)
+- **Report Renderer**: HTML report generation (`render_report.py`)
+- **Integrity Check**: Final validation (`check_integrity.py`)
+
+### 2. Workflow Steps
+
+**Complete Pipeline Flow:**
+
+1. **Step 0: Initialization**
+   - Check requirements (software, dependencies)
+   - Validate input data (fast_pass folder structure)
+   - Generate `config.yaml` with project parameters
+   - Create output directory structure
+
+2. **Step 1: Assembly and Annotation (epi2me wf-clone-validation)**
+   - Input: `fast_pass/` folder (nanopore sequencing output)
+   - Tool: epi2me wf-clone-validation (Nextflow workflow)
+   - Output: Assembled FASTA files, annotation results, HTML report
+   - Each subfolder in `fast_pass/` represents a different plasmid sample
+
+3. **Step 2: Fragment Splitting**
+   - Input: Assembled FASTA files from Step 1
+   - Tool: `scripts/split_plasmid_fasta.py`
+   - Parameters: Fragment size = 2000 bp (default)
+   - Output: Fragmented FASTA files (2kb segments)
+
+4. **Step 3: AB1 File Generation**
+   - Input: Fragmented FASTA files from Step 2
+   - Tool: hyraxAbif (`hyraxAbif-exe gen`)
+   - Output: AB1 chromatogram files for each fragment
+   - Reference: Installation process in `archive/old_data/nanopore-plasmid_analysis_docker.txt`
+
+5. **Step 4: Report Generation**
+   - Input: All results from previous steps
+   - Tool: `scripts/generate_complete_reports.py`
+   - Output: Comprehensive PDF reports with coverage plots, statistics, and visualizations
+
+6. **Step 5: Result Summary**
+   - Generate `result.json` with key metrics
+   - Create summary visualizations
+   - Generate final HTML report
+
+### 3. Docker Integration
+
+**Docker Image Requirements:**
+
+- Base: Ubuntu (latest)
+- Tools:
+  - Nextflow (for epi2me wf-clone-validation)
+  - hyraxAbif (Haskell-based, requires stack)
+  - Python 3.9+ with required packages
+  - All bioinformatics tools from epi2me workflow
+
+**Dockerfile Structure:**
+```dockerfile
+FROM ubuntu:latest
+# Install system dependencies
+# Install Nextflow
+# Install hyraxAbif
+# Install Python packages
+# Copy pipeline scripts
+# Set working directory
+# Define entry point
+```
+
+### 4. Input Data Structure
+
+**Expected Input:**
+```
+fast_pass/
+├── sample1/
+│   ├── *.fastq
+│   └── *.fastq.gz
+├── sample2/
+│   ├── *.fastq
+│   └── *.fastq.gz
+└── ...
+```
+
+Each subfolder represents a different plasmid sample.
+
+### 5. Output Structure
+
+**Standard Output Directory:**
+```
+output/
+├── 01.assembly/          # epi2me wf-clone-validation results
+│   ├── sample1/
+│   │   ├── *.final.fasta
+│   │   ├── *.final.fastq
+│   │   └── wf-clone-validation-report.html
+│   └── sample2/
+├── 02.fragments/         # Split FASTA fragments
+│   ├── sample1_2k_fragmented/
+│   └── sample2_2k_fragmented/
+├── 03.ab1_files/         # AB1 chromatogram files
+│   ├── sample1_ab1/
+│   └── sample2_ab1/
+├── 04.reports/           # Final PDF reports
+│   ├── sample1_report.pdf
+│   └── sample2_report.pdf
+├── 05.summary/           # Summary JSON and visualizations
+│   ├── result.json
+│   └── summary_plots/
+└── logs/                 # All log files
+```
+
+### 6. Configuration Management
+
+**config.yaml Structure:**
+```yaml
+project:
+  project_id: "auto-generated"
+  input_dir: "fast_pass"
+  output_dir: "output"
+  
+assembly:
+  tool: "epi2me_wf_clone_validation"
+  workflow_version: "latest"
+  approx_size: 5000  # Approximate plasmid size
+  coverage: 50        # Target coverage
+  
+fragmentation:
+  fragment_size: 2000  # bp
+  tool: "split_plasmid_fasta.py"
+  
+ab1_generation:
+  tool: "hyraxAbif"
+  executable: "/opt/hyraxAbif/hyraxAbif-exe"
+  
+reporting:
+  tool: "generate_complete_reports.py"
+  format: "pdf"
+  include_coverage: true
+  include_length_dist: true
+```
+
+### 7. Script Organization
+
+**Scripts Directory Structure:**
+```
+scripts/
+├── step0_initialize_analysis.py    # Initialization and config generation
+├── step1_run_epi2me_workflow.py   # epi2me wf-clone-validation wrapper
+├── step2_split_fragments.py      # FASTA fragmentation
+├── step3_generate_ab1.py         # AB1 file generation
+├── step4_generate_reports.py     # Report generation
+├── step5_summarize_results.py    # Result summary and JSON
+├── generate_result_json.py       # Result JSON generator
+├── generate_visualizations.py    # Plot generation
+├── render_report.py              # HTML report renderer
+├── check_integrity.py            # Final integrity check
+├── split_plasmid_fasta.py        # Existing fragmentation script
+├── generate_complete_reports.py  # Existing report generator
+└── utils/                        # Utility functions
+    ├── __init__.py
+    ├── epi2me_wrapper.py
+    ├── hyraxabif_wrapper.py
+    └── config_manager.py
+```
+
+### 8. Integration with epi2me wf-clone-validation
+
+**Workflow Integration:**
+
+- Use Nextflow to run epi2me wf-clone-validation workflow
+- Process each sample subfolder in `fast_pass/` separately
+- Extract key outputs:
+  - `*.final.fasta` - Assembled sequences
+  - `*.final.fastq` - Processed reads
+  - `wf-clone-validation-report.html` - Workflow report
+  - Annotation files (if available)
+
+**Key Parameters:**
+- `--input`: Path to fast_pass folder or sample subfolder
+- `--approx_size`: Approximate plasmid size
+- `--coverage`: Target coverage
+- `--output`: Output directory
+
+### 9. hyraxAbif Integration
+
+**Installation Requirements:**
+- Haskell Stack
+- Additional dependencies (see `archive/old_data/nanopore-plasmid_analysis_docker.txt`)
+- Stack.yaml configuration with extra-deps
+
+**Usage Pattern:**
+```bash
+hyraxAbif-exe gen <input_fragmented_dir> <output_ab1_dir>
+```
+
+**Input:** Directory containing fragmented FASTA files
+**Output:** Directory containing AB1 files (one per fragment)
+
+### 10. Report Generation
+
+**Report Components:**
+
+1. **Basic Statistics**
+   - Total reads and bases
+   - Host genomic DNA statistics
+   - Assembly status
+
+2. **Assembly Information**
+   - Contig details (length, coverage, circularity)
+   - Mapping statistics
+   - Quality metrics
+
+3. **Visualizations**
+   - Coverage plots (per contig)
+   - Read length distribution
+   - Assembly quality metrics
+
+4. **Fragment Information**
+   - Fragment count and sizes
+   - AB1 file locations
+
+**Report Format:** PDF (using `generate_complete_reports.py`)
+
+### 11. Logging and Error Handling
+
+**Logging Standards:**
+- All steps redirect logs to `{output_dir}/logs/`
+- Log files: `{step_name}_{timestamp}.log`
+- Use Python `logging` module with appropriate levels
+- Include timestamps, step names, and error details
+
+**Error Handling:**
+- Check file existence before processing
+- Validate intermediate outputs
+- Provide clear error messages
+- Support resume/restart capability
+
+### 12. Docker Workflow
+
+**Docker Execution:**
+```bash
+docker run --rm \
+  -v /path/to/fast_pass:/data/input \
+  -v /path/to/output:/data/output \
+  nanopore-plasmid-pipeline:latest \
+  --input /data/input \
+  --output /data/output \
+  --project-id PROJECT_ID
+```
+
+**Volume Mounts:**
+- Input: `fast_pass/` folder
+- Output: Output directory
+- Optional: Config file, reference databases
+
+### 13. Best Practices
+
+**Code Organization:**
+- Use relative paths in scripts
+- Follow step-based architecture
+- Implement proper error handling
+- Generate comprehensive logs
+- Validate inputs and outputs
+
+**Workflow Design:**
+- Make steps independent and resumable
+- Check for existing outputs before processing
+- Generate intermediate checkpoints
+- Support parallel processing where possible
+
+**Documentation:**
+- Document all steps in `docs/`
+- Include usage examples
+- Document Docker build and usage
+- Maintain change logs
+
+### 14. Integration with Other Rules
+
+This rule **extends** and **integrates** with:
+- `code_reuse.mdc` - Code reuse requirements
+- `pipeline_execution.mdc` - Execution patterns
+- `execution_workflow.mdc` - Technical workflow
+- `project_organization.mdc` - File organization
+- `general.mdc` - General development practices
+
+**All rules work together** to ensure comprehensive, reproducible, and well-documented nanopore plasmid assembly workflows.
+
+---
+
+**Last Updated**: 2025-01-XX  
+**Based on**: epi2me wf-clone-validation workflow  
+**Status**: Active development

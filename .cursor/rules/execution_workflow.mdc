@@ -1,0 +1,322 @@
+---
+alwaysApply: true
+---
+
+# miRNA Analysis Pipeline Execution Workflow
+
+## COMPLIANCE CONFIRMED
+
+**I will follow the established execution workflow. Every action will reference this workflow and existing project structure.**
+
+## Core Technical Philosophy
+
+This project follows a **sequential, modular, and validated** approach to miRNA sequencing analysis. Each step builds upon previous results, with quality checks at every stage.
+
+## Project Execution Workflow
+
+### PHASE 0: Project Initialization and Preparation
+
+**Purpose**: Set up environment, verify data, and configure pipeline
+
+**Steps**:
+1. **Environment Setup**
+   - Verify conda/miniconda installation
+   - Activate or create miRNA analysis environment
+   - Install required software (cutadapt, bowtie, miRDeep2, umi_tools, etc.)
+   - Reference: `docs/SERVER_SETUP.md` for detailed setup
+
+2. **Data Verification**
+   - Verify input FASTQ files exist in `01.rawdata/`
+   - Confirm file naming pattern: `*_R1.fastq.gz`
+   - Check file formats and sizes
+   - Verify adapter sequences match sequencing kit
+
+3. **Configuration**
+   - Set species-specific parameters (mmu, hsa, SF9)
+   - Configure database paths (miRBase, reference genome)
+   - Set adapter sequences based on sequencing kit
+   - Configure UMI pattern if using UMI-based pipeline
+
+4. **Software Validation**
+   - Verify all tools are installed and accessible
+   - Check database files exist
+   - Test with small sample if needed
+
+**Output**: Ready-to-run pipeline with verified data and software
+
+---
+
+### PHASE 1: Quality Control and Preprocessing
+
+**Scripts**: `run_miRNA_quantification_*.sh`  
+**Purpose**: Extract UMI (if applicable), trim adapters, and filter reads
+
+**Technical Approach**:
+
+1. **UMI Extraction** (UMI-based pipelines only)
+   - Use `umi_tools extract` to extract UMI from read names
+   - Pattern: `NNNNNNNNNNNN` (12nt UMI for Qiagen)
+   - Output: `01.umi_extracted/SAMPLE_umi.fastq`
+
+2. **Adapter Trimming**
+   - Use `cutadapt` for adapter removal
+   - Species/kit-specific adapters:
+     - Mouse (Qiagen): `AACTGTAGGCACCATCAAT`
+     - Human (Vazyme): `AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC`
+   - Length filtering: 18-30bp (strict for UMI) or 15-30bp (standard)
+   - Output: `01.qc/SAMPLE_trimmed.fastq`
+
+**Key Decisions**:
+- Choose standard or UMI-based pipeline based on data
+- Verify adapter sequence matches sequencing kit
+- Use strict length filtering for UMI pipelines
+
+**Output Location**: `${OUTDIR}/01.qc/` or `${OUTDIR}/01.umi_extracted/`  
+**Critical Output**: Trimmed FASTQ files ready for mapping
+
+**Next Step**: Proceed to Step 2 for genome mapping
+
+---
+
+### PHASE 2: Genome Mapping
+
+**Purpose**: Map trimmed reads to reference genome
+
+**Technical Approach**:
+
+1. **Read Mapping**
+   - Use `mapper.pl` (miRDeep2) with Bowtie1
+   - Species-specific reference genomes:
+     - Mouse: mm39
+     - Human: hg38
+     - SF9: SF9 genome
+   - Output: FASTA sequences and ARF (alignment result format) files
+
+2. **UMI Deduplication** (UMI-based pipelines only)
+   - Use `umi_tools dedup` for UMI-based deduplication
+   - Method: `unique` (keep unique UMI-genomic position pairs)
+   - Output: Deduplicated ARF file
+
+**Key Decisions**:
+- Use appropriate reference genome for species
+- Apply UMI deduplication if using UMI pipeline
+- Review mapping statistics for quality assessment
+
+**Output Location**: `${OUTDIR}/02.mapping/`  
+**Critical Output**: `SAMPLE_reads.fa` and `SAMPLE_reads_vs_genome.arf` (or deduplicated version)
+
+**Next Step**: Proceed to Step 3 for miRNA quantification
+
+---
+
+### PHASE 3: miRNA Quantification
+
+**Purpose**: Quantify known miRNA expression
+
+**Technical Approach**:
+
+1. **miRNA Quantification**
+   - Use `quantifier.pl` (miRDeep2) against miRBase database
+   - Species-specific miRBase files (hairpin.fa, mature.fa)
+   - Use deduplicated ARF file if available (UMI pipeline)
+   - Output: Expression counts per miRNA
+
+2. **Result Collection**
+   - Copy results from `expression_analyses/` directory
+   - Format: CSV with miRNA ID, read count, precursor information
+
+**Key Decisions**:
+- Use correct species code (mmu, hsa, etc.)
+- Use deduplicated ARF for UMI pipelines
+- Review expression levels for quality
+
+**Output Location**: `${OUTDIR}/03.quantification/`  
+**Critical Output**: `SAMPLE_exp.csv` with miRNA expression counts
+
+**Next Step**: Proceed to Step 4 for novel miRNA discovery (optional) or Step 5 for merging
+
+---
+
+### PHASE 4: Novel miRNA Discovery (Optional)
+
+**Purpose**: Identify novel miRNA candidates
+
+**Technical Approach**:
+
+1. **Novel miRNA Prediction**
+   - Use `miRDeep2.pl` for novel miRNA discovery
+   - Input: Mapped reads (FASTA), genome, ARF file
+   - Reference: miRBase mature and hairpin sequences
+   - Database: Rfam for filtering non-miRNA RNAs
+   - Output: Novel miRNA candidates with confidence scores
+
+**Key Decisions**:
+- Novel discovery is optional and time-consuming
+- Review confidence scores for novel candidates
+- Use deduplicated ARF for UMI pipelines
+
+**Output Location**: `${OUTDIR}/04.novel/`  
+**Critical Output**: Novel miRNA predictions with scores
+
+**Next Step**: Proceed to Step 5 for result merging
+
+---
+
+### PHASE 5: Result Merging and Statistics
+
+**Purpose**: Merge results across samples and collect statistics
+
+**Technical Approach**:
+
+1. **Merge Quantification Results**
+   - Use `mirna_quantification_merger_v2.py`
+   - Generate two output formats:
+     - Detailed: Precursor-level expression (preserves precursor relationships)
+     - Summed: miRNA-level expression (sums counts across precursors)
+   - Output: TSV files with all samples
+
+2. **Collect Pipeline Statistics**
+   - Use `mirna_pipeline_stats_merger.py`
+   - Parse cutadapt logs and mapping statistics
+   - Calculate read losses at each step
+   - Output: Comprehensive statistics TSV
+
+**Key Decisions**:
+- Review merged expression matrices
+- Check statistics for quality issues
+- Verify all samples are included
+
+**Output Location**: `${OUTDIR}/03.quantification/` and `${OUTDIR}/`  
+**Critical Output**: Merged expression matrices and pipeline statistics
+
+**Next Step**: Proceed to downstream analysis (differential expression, target prediction, etc.)
+
+---
+
+### PHASE 6: Downstream Analysis (Optional)
+
+**Purpose**: Differential expression, target prediction, and functional analysis
+
+**Technical Approach**:
+
+1. **Differential Expression Analysis**
+   - Use DESeq2, edgeR, or limma-voom
+   - Input: Merged expression matrix
+   - Output: Differentially expressed miRNAs
+
+2. **Target Prediction**
+   - Use miRanda, TargetScan, or RNAhybrid
+   - Predict mRNA targets for differentially expressed miRNAs
+   - Output: Target predictions with scores
+
+3. **Functional Analysis**
+   - Use clusterProfiler for GO and KEGG enrichment
+   - Analyze target genes for enriched pathways
+   - Output: Enrichment results
+
+**Key Decisions**:
+- Choose appropriate statistical method
+- Use multiple target prediction tools for validation
+- Focus on high-confidence predictions
+
+**Output Location**: `${OUTDIR}/05.differential/`, `${OUTDIR}/06.targets/`, `${OUTDIR}/07.functional/`
+
+---
+
+## Decision Points and Workflow Branches
+
+### Decision 1: Pipeline Type
+- **Standard Pipeline**: For standard small RNA-seq data
+- **UMI Pipeline**: For UMI-tagged sequencing data (Qiagen kits)
+- **Decision**: Check if data contains UMI sequences
+
+### Decision 2: Species Selection
+- **Mouse (mm39)**: Use `run_miRNA_quantification_mm39.sh` or `*_qiagen_UMI.sh`
+- **Human (hg38)**: Use `run_miRNA_quantification_hg38.sh` or `*_qiagen_UMI.sh`
+- **SF9**: Use `run_miRNA_quantification_SF9.sh`
+- **Decision**: Based on sample species
+
+### Decision 3: Novel Discovery
+- **Run Novel Discovery**: Time-consuming but identifies new miRNAs
+- **Skip Novel Discovery**: Faster, only quantifies known miRNAs
+- **Decision**: Based on research goals and time constraints
+
+### Decision 4: Execution Environment
+- **Local Execution**: Single machine, sequential processing
+- **SLURM Cluster**: Parallel processing across multiple samples
+- **Decision**: Based on number of samples and cluster availability
+
+---
+
+## Execution Commands Reference
+
+### Local Execution
+
+```bash
+# Mouse (mm39) - Standard
+bash run_miRNA_quantification_mm39.sh \
+    --input-dir 01.rawdata \
+    --out-dir results \
+    --threads 16
+
+# Mouse (mm39) - UMI
+bash run_miRNA_quantification_mm39_qiagen_UMI.sh \
+    --input-dir 01.rawdata \
+    --out-dir results \
+    --threads 16
+
+# Human (hg38) - Standard
+bash run_miRNA_quantification_hg38.sh \
+    --input-dir 01.rawdata \
+    --out-dir results \
+    --threads 16
+
+# Human (hg38) - UMI
+bash run_miRNA_quantification_hg38_qiagen_UMI.sh \
+    --input-dir 01.rawdata \
+    --out-dir results \
+    --threads 16
+```
+
+### SLURM Cluster Execution
+
+```bash
+# Submit job array for multiple samples
+sbatch run_miRNA_quantification_mm39_qiagen_UMI_slurm.sh \
+    --input-dir 01.rawdata \
+    --out-dir results \
+    --job-array 1-24
+```
+
+---
+
+## Critical Reminders
+
+1. **NEVER modify original data** - All outputs to `${OUTDIR}`
+2. **ALWAYS check file existence** - Avoid duplicate work
+3. **VERIFY adapter sequences** - Match sequencing kit
+4. **REVIEW quality metrics** - Check statistics after each step
+5. **FOLLOW sequential order** - Steps must run in order
+6. **USE existing patterns** - Reference existing scripts for code patterns
+7. **GENERATE summary reports** - Each step produces logs and summaries
+8. **VALIDATE outputs** - Check file existence and sizes after completion
+
+---
+
+## Integration with Other Rules
+
+This workflow **extends** and **integrates** with:
+- `code_reuse.mdc` - Code reuse requirements
+- `pipeline_execution.mdc` - Execution patterns and standards
+- `general.mdc` - General project rules
+- `rules.mdc` - Critical rules summary
+
+**All rules work together** to ensure consistent, efficient, and maintainable pipeline execution.
+
+---
+
+**Last Updated**: 2025-11-18  
+**Based on**: 
+- miRDeep2 documentation and best practices
+- Small RNA-seq analysis protocols
+- Project structure and existing scripts

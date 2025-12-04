@@ -1,0 +1,185 @@
+---
+alwaysApply: true
+---
+
+# n8n Workflow Development Rules
+
+## COMPLIANCE CONFIRMED
+
+**I will follow n8n workflow development best practices. Every workflow and template will be well-documented, tested, and maintainable.**
+
+## Core Principles
+
+### 1. Workflow Design
+
+**Before creating any workflow:**
+- Understand the automation goal clearly
+- Identify reusable components from existing templates
+- Design for maintainability and extensibility
+- Consider error handling and edge cases
+- Plan for monitoring and logging
+
+**Workflow Structure:**
+- Use clear, descriptive node names
+- Group related nodes logically
+- Add comments/notes to complex logic
+- Use consistent naming conventions
+- Keep workflows focused on a single purpose
+
+### 2. Template Organization
+
+**Template Directory Structure:**
+```
+templates/<template_name>/
+├── <template_name>_workflow.json    # Main workflow file
+├── README.md                        # Template documentation
+├── QUICK_START.md                   # Quick start guide
+├── CHANGE_LOGS.md                   # Change history
+├── scripts/                         # Supporting scripts
+│   └── *.sh or *.py
+├── import_workflow.py               # Import utility (optional)
+└── docs/                            # Additional documentation (optional)
+    └── *.md
+```
+
+**Required Files:**
+- ✅ Workflow JSON file
+- ✅ README.md with complete documentation
+- ✅ QUICK_START.md for quick reference
+- ✅ CHANGE_LOGS.md for version tracking
+
+### 3. Workflow JSON Best Practices
+
+**Node Configuration:**
+- Use descriptive node names (e.g., "SSH - Master Node" not "SSH1")
+- Configure credentials properly (never hardcode)
+- Use environment variables for sensitive data
+- Add helpful descriptions/notes to complex nodes
+
+**Error Handling:**
+- Use IF nodes for conditional logic
+- Handle errors gracefully
+- Provide meaningful error messages
+- Log errors appropriately
+
+**Data Flow:**
+- Use Merge nodes when combining multiple inputs
+- Use Code nodes for complex data transformation
+- Validate data at each step
+- Use consistent data structures
+
+### 4. Script Development
+
+**Bash Scripts:**
+- Use `set -e` for error handling
+- Add comments explaining complex logic
+- Output JSON for structured data
+- Handle edge cases and errors
+- Use relative paths when possible
+
+**Python Scripts:**
+- Follow PEP 8 style guide
+- Add docstrings to functions
+- Handle exceptions properly
+- Use type hints when appropriate
+- Output JSON for structured data
+
+### 5. Documentation Requirements
+
+**README.md Must Include:**
+- Template overview and purpose
+- Prerequisites and requirements
+- Installation/import instructions
+- Configuration guide
+- Usage examples
+- Troubleshooting section
+- Links to related documentation
+
+**QUICK_START.md Must Include:**
+- Prerequisites checklist
+- Step-by-step setup (5-10 steps max)
+- Basic configuration
+- Verification steps
+- Common issues and quick fixes
+
+**CHANGE_LOGS.md Must Include:**
+- Date of change
+- Description of change
+- Files modified/added
+- Breaking changes (if any)
+- Migration notes (if needed)
+
+### 6. Testing and Validation
+
+**Before Publishing a Template:**
+- ✅ Test workflow execution end-to-end
+- ✅ Verify all nodes are properly connected
+- ✅ Test error scenarios
+- ✅ Validate data flow
+- ✅ Check documentation accuracy
+- ✅ Verify scripts work correctly
+- ✅ Test import/export functionality
+
+### 7. Credential Management
+
+**Never:**
+- ❌ Hardcode credentials in workflow JSON
+- ❌ Commit credentials to version control
+- ❌ Share credentials in documentation
+
+**Always:**
+- ✅ Use n8n credential system
+- ✅ Document required credentials in README
+- ✅ Provide setup guides for credentials
+- ✅ Use environment variables when appropriate
+
+### 8. Version Control
+
+**Workflow JSON Files:**
+- Use descriptive filenames: `<template_name>_workflow.json`
+- Include version information in CHANGE_LOGS.md
+- Tag releases when appropriate
+- Document breaking changes
+
+**Scripts:**
+- Version control all scripts
+- Document script dependencies
+- Include usage examples in comments
+
+### 9. Code Reuse
+
+**Before Creating New Workflows:**
+1. Search existing templates for similar functionality
+2. Identify reusable components
+3. Extend existing templates when possible
+4. Document why new template is needed
+
+**Reusable Components:**
+- Common node patterns (SSH, HTTP, Email)
+- Utility scripts
+- Data transformation logic
+- Error handling patterns
+
+### 10. Maintenance
+
+**Regular Maintenance Tasks:**
+- Update documentation when workflows change
+- Test workflows after n8n updates
+- Review and update credentials setup guides
+- Keep dependencies up to date
+- Archive deprecated templates
+
+## Integration with Other Rules
+
+This rule **extends** and **integrates** with:
+- `rules.mdc` - Core project rules
+- `code_reuse.mdc` - Code reuse requirements
+- `project_organization.mdc` - File organization
+- `general.mdc` - General development practices
+
+**All rules work together** to ensure consistent, maintainable, and well-documented n8n workflows.
+
+---
+
+**Last Updated**: 2025-11-28  
+**Version**: 1.0

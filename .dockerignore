@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+docs/
+*.md
+CHANGE_LOGS.md
+
+# Archive
+archive/
+
+# Logs
+logs/
+*.log
+
+# Output
+output/
+results/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+

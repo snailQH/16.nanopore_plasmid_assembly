@@ -1,0 +1,183 @@
+---
+alwaysApply: true
+---
+
+# Project File Organization Rules
+## Based on Noble (2009) Best Practices
+
+## COMPLIANCE CONFIRMED
+
+**I will follow the established project organization structure. All file movements and organization will reference this structure and existing patterns.**
+
+## Core Principles (Noble 2009)
+
+### Principle 1: Reproducibility
+**Someone unfamiliar with your project should be able to look at your computer files and understand in detail what you did and why.**
+
+This "someone" could be:
+- Someone who read your published article and wants to reproduce your work
+- A collaborator who wants to understand the details
+- A future student working in your lab
+- Your research advisor
+- **Most commonly: yourself** (a few months from now)
+
+### Principle 2: Repetition
+**Everything you do, you will probably have to do over again.**
+
+- You will discover flaws in initial data preparation
+- You will get access to new data
+- You will need to adjust parameters
+- Clear organization makes repetition much easier
+
+## Project Directory Structure
+
+### Standard Structure (Following Noble 2009)
+
+```
+project_root/
+├── README.md              # Main entry point (ONLY documentation in root)
+├── run_miRNA_quantification_*.sh  # Main pipeline scripts
+│
+├── scripts/               # All executable utility scripts
+│   ├── mirna_quantification_merger_v2.py
+│   ├── mirna_pipeline_stats_merger.py
+│   ├── collect_mapping_stats.py
+│   └── generate_test_data.py
+│
+├── docs/                  # ALL documentation (except README.md)
+│   ├── METHODOLOGY.md    # Scientific methodology
+│   ├── PIPELINE_SUMMARY.md # Pipeline overview
+│   ├── QUICKSTART.md     # Quick start guide
+│   ├── SERVER_SETUP.md   # Server setup guide
+│   └── [other docs]
+│
+├── templates/            # Report templates
+│   └── miRNA_report_template.html
+│
+├── results/              # Local results (downloaded from server)
+│   └── [sample-specific subdirectories]
+│
+└── .cursor/              # Cursor IDE rules and configuration
+    └── rules/            # Project execution rules
+```
+
+## Root Directory Rules
+
+### Files Allowed in Root
+**ONLY these files should be in the root directory:**
+
+1. **README.md** - Main entry point and user guide
+2. **run_miRNA_quantification_*.sh** - Main pipeline scripts
+3. **Essential configuration files** (if any)
+
+### Files NOT Allowed in Root
+**All other documentation files MUST be in `docs/`:**
+
+- ❌ METHODOLOGY.md → `docs/METHODOLOGY.md`
+- ❌ PIPELINE_SUMMARY.md → `docs/PIPELINE_SUMMARY.md`
+- ❌ QUICKSTART.md → `docs/QUICKSTART.md`
+- ❌ SERVER_SETUP.md → `docs/SERVER_SETUP.md`
+- ❌ All log files → appropriate subdirectory
+- ❌ All temporary files → appropriate subdirectory
+
+## Directory Organization Principles
+
+### 1. Logical Organization at Top Level
+- **scripts/**: All utility scripts
+- **docs/**: All documentation
+- **templates/**: Report templates
+- **results/**: All output results (local copies)
+- **.cursor/**: IDE configuration
+
+### 2. Chronological Organization for Results
+- Results directories: `results/01.qc/`, `results/02.mapping/`, etc.
+- Date-based subdirectories if needed: `results/2024-11-21/`
+- Reference: Noble (2009) recommends chronological organization for results
+
+### 3. Logical Organization for Documentation
+- All documentation in `docs/` directory
+- Subdirectories by topic if needed: `docs/user_guides/`, `docs/technical/`
+- Single README.md in root as entry point
+
+## File Naming Conventions
+
+### Scripts
+- Pattern: `run_miRNA_quantification_*.sh` (descriptive names)
+- Utility scripts: `*_merger.py`, `*_stats.py` (functional names)
+- Descriptive names in lowercase with underscores
+
+### Documentation
+- Pattern: `DESCRIPTION.md` (e.g., `METHODOLOGY.md`, `QUICKSTART.md`)
+- Descriptive names, title case
+- English for publication, Chinese for user guides (in `docs/`)
+
+### Configuration Files
+- Pattern: `config.*` (e.g., `config.sh`, `config.yaml`)
+- Standard names for easy discovery
+
+### Results
+- Pattern: `01.qc/`, `02.mapping/`, etc. (numbered by step)
+- Sample-specific files: `SAMPLE_*.fastq`, `SAMPLE_*.csv`
+- Descriptive subdirectory names
+
+## Documentation Organization
+
+### README.md (Root Only)
+- **Purpose**: Main entry point for the project
+- **Content**: 
+  - Project overview
+  - Quick start guide
+  - Links to detailed documentation in `docs/`
+  - Basic usage examples
+- **Length**: Concise, comprehensive overview
+
+### docs/ Directory
+- **Purpose**: All detailed documentation
+- **Organization**:
+  - Scientific methodology: `METHODOLOGY.md`
+  - Technical guides: `QUICKSTART.md`, `SERVER_SETUP.md`
+  - Pipeline overview: `PIPELINE_SUMMARY.md`
+  - Changes log: `changes_log.md` - All changes, updates, and improvements
+  - Execution history: `run_history.md` - All executions and conversations
+  - User guides (Chinese): `使用说明.md`, etc.
+
+## Version Control Considerations
+
+### Files to Version Control
+- ✅ All source code (`scripts/`, `*.sh`)
+- ✅ All configuration files (`config.*`)
+- ✅ All documentation (`README.md`, `docs/*.md`)
+- ✅ Pipeline scripts (`run_*.sh`)
+- ✅ Project rules (`.cursor/rules/`)
+
+### Files NOT to Version Control
+- ❌ Automatically generated files (`results/`, compiled binaries)
+- ❌ Large data files
+- ❌ Log files (unless small and important)
+- ❌ Temporary files
+
+## Integration with Existing Rules
+
+This organization rule **extends** and **integrates** with:
+- `code_reuse.mdc` - Code reuse requirements (extend existing structure)
+- `pipeline_execution.mdc` - Execution patterns (use organized structure)
+- `execution_workflow.mdc` - Technical workflow (reference organized docs)
+- `general.mdc` - General project rules (project structure section)
+
+## Migration Strategy
+
+When reorganizing files:
+
+1. **Create docs/ directory** if it doesn't exist
+2. **Move documentation files** from root to `docs/`
+3. **Update references** in README.md to point to `docs/`
+4. **Update any script references** to documentation paths
+5. **Maintain backward compatibility** where possible
+
+## References
+
+- **Noble WS (2009)**: A Quick Guide to Organizing Computational Biology Projects. *PLoS Comput Biol* 5(7): e1000424. https://doi.org/10.1371/journal.pcbi.1000424
+
+---
+
+**Remember**: The goal is reproducibility and clarity. Someone (including future you) should be able to understand the project structure at a glance.

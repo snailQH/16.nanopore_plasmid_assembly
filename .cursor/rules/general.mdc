@@ -1,0 +1,140 @@
+---
+alwaysApply: true
+---
+
+# General Project Rules
+
+## Project Context Understanding (CRITICAL - MUST DO FIRST)
+
+**BEFORE starting any task or making any changes, you MUST:**
+
+1. **Read and understand project documentation**
+   - Read `README.md` in the root directory (main entry point)
+   - Review key documentation in `docs/` directory:
+     - Project index and structure (`docs/PROJECT_INDEX.md`)
+     - Current status and progress
+     - Changes log and updates (`CHANGE_LOGS.md`)
+     - Template documentation (if working on templates)
+   - **Review Cursor memories** for project-specific patterns and decisions
+   - Check for any status reports or progress documents
+
+2. **Understand current project state**
+   - Identify which pipeline steps have been completed
+   - Check what is currently running or pending
+   - Review any recent errors or issues documented
+   - Understand the current data and software status
+
+3. **Review project requirements**
+   - Understand the scientific goals and objectives
+   - Review methodology and protocol requirements
+   - Check quality targets and success criteria
+   - Understand data sources and expected outputs
+
+4. **Check execution history**
+   - Review execution history for previous details
+   - Check for any ongoing processes or background tasks
+   - Review any user feedback or specific requirements
+
+5. **Verify current status before proceeding**
+   - Check running processes on remote server (if applicable)
+   - Verify file existence and current outputs
+   - Confirm software and database availability
+   - Check for any pending tasks or dependencies
+
+**Only after completing this review should you proceed with any new task or modification.**
+
+This ensures:
+- **Continuity**: Your actions build upon previous work
+- **Consistency**: You follow established patterns and decisions
+- **Efficiency**: You avoid duplicate work or conflicting changes
+- **Context awareness**: You understand why things are done a certain way
+
+**Example workflow:**
+```
+1. Read README.md → Understand project overview
+2. Review docs/ → Understand current progress
+3. Check execution history → Understand recent activities
+4. Check remote server status → Verify what's running
+5. Review relevant methodology docs → Understand requirements
+6. THEN proceed with requested task
+```
+
+## Language and Style
+- Keep the output in English.
+- Keep the code and documentation in English.
+- Keep the code and documentation in a professional and academic style.
+- Keep the code and documentation in a clear and concise style.
+- Keep the code and documentation in a logical and organized style.
+
+## Project Structure
+Keep the project structure in a logical and organized style:
+```
+n8n_manager/
+├── README.md                    # Main entry point (project overview)
+├── CHANGE_LOGS.md              # Project change history
+├── docker-compose.yml          # Configuration files
+├── docker-compose.postgresql.yml
+│
+├── docs/                       # Project-level documentation
+│   ├── PROJECT_INDEX.md        # Documentation index
+│   ├── DATABASE_MIGRATION.md   # Infrastructure docs
+│   └── [other project docs]
+│
+├── scripts/                    # Project-level scripts
+│   └── [utility scripts]
+│
+├── templates/                  # Template-level documentation
+│   ├── README.md              # Templates overview
+│   └── <template_name>/       # Individual templates
+│       ├── <template>_workflow.json
+│       ├── README.md
+│       ├── QUICK_START.md
+│       ├── CHANGE_LOGS.md
+│       └── scripts/
+│
+└── .cursor/rules/             # Development rules
+    └── [rule files]
+```
+
+**Documentation Organization:**
+- **Project-Level**: Infrastructure, deployment, database (`docs/`)
+- **Template-Level**: Template-specific usage (`templates/<name>/`)
+
+See `docs/PROJECT_INDEX.md` for complete documentation structure.
+See `project_organization.mdc` for detailed organization rules.
+
+## File Naming Conventions
+- Workflow files: `<template_name>_workflow.json`
+- Scripts: `*.sh` or `*.py` (descriptive names)
+- Documentation: `README.md`, `QUICK_START.md`, `CHANGE_LOGS.md`
+- Configuration: `CONFIGURATION.md`, `*_SETUP.md`
+- Troubleshooting: `TROUBLESHOOTING_*.md`, `*_FIX.md`
+
+## Code Quality Standards
+- Use `set -e` in all bash scripts (exit on error)
+- Check file existence before processing
+- Provide clear error messages
+- Log all operations
+- Validate outputs after each step
+
+## Code Reuse Standards (CRITICAL)
+- **ANALYZE EXISTING CODE FIRST** - Search codebase before any changes
+- **REFERENCE EXISTING CODE** - Cite specific file paths in all suggestions
+- **EXTEND BEFORE CREATE** - Modify existing files before creating new
+- **CONSOLIDATE DUPLICATES** - Merge duplicate code patterns
+- **JUSTIFY NEW FILES** - Exhaustive analysis required for new files
+
+See `code_reuse.mdc` for mandatory code reuse process and rules.
+
+## Data Management
+- Never modify original input data
+- All outputs to separate `${OUTDIR}`
+- Use relative paths in configuration when possible
+- Support both local and remote execution
+
+## Documentation Standards
+- All code comments in English
+- All user messages in English
+- Include purpose, inputs, outputs, and parameters
+- Provide troubleshooting guides
+- Document methodology for publication

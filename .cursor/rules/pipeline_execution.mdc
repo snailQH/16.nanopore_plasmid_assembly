@@ -1,0 +1,346 @@
+---
+alwaysApply: true
+---
+
+# Pipeline Execution Rules and Best Practices
+
+## Core Principles
+
+### 1. File Existence Checking (Critical)
+**ALWAYS check if output files exist before processing to avoid duplicate work:**
+- Before any processing step, check if output already exists
+- If output exists and is non-empty, skip the step
+- Display clear message: "✓ [File] already exists: [path]"
+- Example pattern:
+```bash
+if [ -f "${output_file}" ] && [ -s "${output_file}" ]; then
+    echo "  ✓ File already exists: $(basename "${output_file}")"
+    continue
+else
+    # Perform processing
+    process_file "${input_file}" "${output_file}"
+fi
+```
+
+### 2. Data Protection
+- **NEVER modify original input data files**
+- All outputs go to separate output directory structure
+- Use `${OUTDIR}` for all results, never write to input directory
+- Original data in input directory must remain untouched
+
+### 3. Path Management
+- Use **relative paths** in configuration files for portability when possible
+- Use absolute paths for database and reference genome locations
+- Support both local and remote server execution
+- Paths should be configurable via script parameters
+
+### 4. Language and Documentation
+- **ALL code, comments, and documentation in English**
+- Error messages in English
+- Log files in English
+- User-facing messages in English
+- Only exception: user-specific documentation files can be in Chinese
+
+### 5. Error Handling
+- Use `set -e` at the beginning of scripts (exit on error)
+- Provide clear, actionable error messages
+- Check prerequisites before starting (files, directories, software)
+- Exit with appropriate error codes
+- Example:
+```bash
+set -e  # Exit on error
+
+if [ ! -f "${input_file}" ]; then
+    echo "ERROR: Input file not found: ${input_file}"
+    exit 1
+fi
+```
+
+### 6. Logging and Reporting
+- Each step generates:
+  - Console output with progress indicators
+  - Log file: `${OUTDIR}/logs/SAMPLE_*.log`
+  - Summary information in console
+- Include in logs:
+  - Date and timestamp
+  - Input files and sizes
+  - Output files and locations
+  - Key parameters used
+  - Error messages if any
+
+### 7. Modularity and Independence
+- Each pipeline script is independent and can run standalone
+- Steps check for prerequisites (previous step outputs)
+- Steps can be skipped if outputs exist (idempotent)
+- Support resuming interrupted analyses
+
+### 8. Environment Management
+- Use conda environments for software management when possible
+- Check software availability before use
+- Provide clear error messages if software is missing
+- Document software requirements
+
+### 9. Progress Monitoring
+- Support background execution with `nohup` or SLURM
+- Generate progress indicators
+- Check running processes before starting new ones
+- Provide status checking capabilities
+
+### 10. Output Validation
+- After each step, validate outputs exist and are non-empty
+- Check file sizes are reasonable
+- Verify file formats (FASTQ, FASTA, CSV, TSV, etc.)
+- Generate validation messages
+
+## Script Structure Standards
+
+### Script Header
+```bash
+#!/bin/bash
+# miRNA quantification pipeline for [Species] ([Genome])
+# Author: [Name]
+# Version: [Version]
+# Date: [Date]
+
+set -e  # Exit on error
+
+# Configuration variables
+THREADS=16
+ADAPTER_SEQ_MIRNA="..."
+MIN_LENGTH=18
+MAX_LENGTH=30
+```
+
+### Output Directory Setup
+```bash
+OUTDIR=results
+mkdir -p ${OUTDIR}/01.qc ${OUTDIR}/02.mapping ${OUTDIR}/03.quantification ${OUTDIR}/04.novel ${OUTDIR}/logs
+
+echo "=== Running miRNA quantification pipeline ==="
+echo "[config] INPUT_DIR=${INPUT_DIR}"
+echo "[config] OUTDIR=${OUTDIR}"
+```
+
+### File Processing Pattern
+```bash
+# 1. Find input files
+SAMPLES=()
+for f in ${INPUT_DIR}/*_R1.fastq.gz; do
+    [ -e "$f" ] || continue
+    bn=$(basename "$f")
+    sid="${bn%%_R1.fastq.gz}"
+    SAMPLES+=("${sid}")
+done
+
+# 2. Process each sample
+for SAMPLE_ID in "${SAMPLES[@]}"; do
+    output_file="${OUTDIR}/step/${SAMPLE_ID}_output.ext"
+    
+    if [ -f "${output_file}" ] && [ -s "${output_file}" ]; then
+        echo "  ✓ Already processed: ${SAMPLE_ID}"
+    else
+        echo "  Processing: ${SAMPLE_ID}"
+        process_sample "${SAMPLE_ID}" "${output_file}"
+        echo "    ✓ Completed"
+    fi
+done
+```
+
+## Configuration Management
+
+### Key Configuration Variables
+```bash
+THREADS=16                          # Number of CPU threads
+ADAPTER_SEQ_MIRNA="..."            # 3' adapter sequence
+MIN_LENGTH=18                      # Minimum read length
+MAX_LENGTH=30                      # Maximum read length
+ORGANISM="mmu"                     # Species code (mmu, hsa, etc.)
+MIRBASE_DIR="/path/to/mirbase"     # miRBase database directory
+REFERENCE_DIR="/path/to/reference" # Reference genome directory
+```
+
+## Quality Control Standards
+
+### Before Processing
+- Verify input files exist and are readable
+- Check disk space availability
+- Verify software is installed and accessible
+- Check system resources (CPU, memory)
+
+### During Processing
+- Monitor progress (if possible)
+- Log intermediate steps
+- Handle errors gracefully
+
+### After Processing
+- Validate output files exist
+- Check file sizes are reasonable
+- Verify file formats
+- Generate summary information
+
+## Remote Execution Support
+
+### Server Connection
+- Support SSH-based remote execution
+- Use passwordless SSH keys
+- Transfer pipeline files to remote server
+- Execute in project directory on remote
+
+### File Transfer
+- Transfer scripts and configs
+- Keep data on remote server (don't transfer large files)
+- Download results as needed
+
+### Monitoring
+- Support background execution
+- Provide log file locations
+- Enable progress checking from local machine
+
+## SLURM Cluster Support
+
+### Job Submission
+- Use SLURM job arrays for parallel sample processing
+- Configure appropriate resource requests (CPU, memory, time)
+- Use appropriate partition and account
+- Generate separate log files per sample
+
+### Job Script Structure
+```bash
+#!/bin/bash
+#SBATCH --job-name=mirna_quant
+#SBATCH --array=1-24
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --time=24:00:00
+#SBATCH --output=logs/slurm_%A_%a.out
+#SBATCH --error=logs/slurm_%A_%a.err
+
+# Process single sample based on array index
+SAMPLE_ID=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+# ... process sample
+```
+
+## Code Style Guidelines
+
+### Naming Conventions
+- Scripts: `run_miRNA_quantification_*.sh` (descriptive names)
+- Variables: UPPERCASE with underscores (e.g., `OUTPUT_DIR`, `THREADS`)
+- Functions: lowercase_with_underscores
+- Directories: lowercase_with_underscores or numbered (e.g., `01.qc`)
+
+### Comments
+- Header comment explaining script purpose
+- Section comments for major steps
+- Inline comments for complex logic
+- All comments in English
+
+### Error Messages
+- Start with "ERROR:" or "WARNING:"
+- Be specific about what failed
+- Suggest solutions when possible
+- Example: `ERROR: Input file not found: ${file}. Please check ${INPUT_DIR}`
+
+## Testing and Validation
+
+### Before Deployment
+- Test on small dataset first
+- Verify file existence checks work
+- Test error handling
+- Validate output formats
+
+### During Execution
+- Monitor first run carefully
+- Check intermediate outputs
+- Verify no duplicate processing
+
+### After Completion
+- Run validation checks
+- Compare outputs with expectations
+- Document any issues
+
+## Documentation Requirements
+
+### For Each Script
+- Purpose and methodology
+- Input requirements
+- Output descriptions
+- Parameter explanations
+- Usage examples
+
+### For Pipeline
+- Overall workflow diagram
+- Prerequisites and installation
+- Configuration guide
+- Usage examples
+- Expected results
+
+## Version Control
+
+- Keep all scripts in version control
+- Tag releases
+- Document changes
+- Maintain backup of working versions
+- Never delete old versions without backup
+
+## Performance Considerations
+
+- Use appropriate number of threads
+- Monitor resource usage
+- Optimize for large datasets
+- Support resume/restart capability
+- Clean up intermediate files when appropriate
+
+## Security and Permissions
+
+- Check file permissions before operations
+- Use appropriate user permissions
+- Don't hardcode passwords or sensitive data
+- Validate paths to prevent directory traversal
+
+## Code Reuse Requirements
+
+### Before Creating New Code
+
+1. **Search existing codebase**
+   - Check all scripts in project directory
+   - Review utility functions in existing scripts
+   - Check configuration patterns
+
+2. **Identify reusable patterns**
+   - File existence checking (see examples above)
+   - Input file finding patterns
+   - Output directory setup
+   - Sample processing loops
+
+3. **Extend existing code**
+   - Add functions to existing scripts
+   - Modify existing configurations
+   - Enhance existing utilities
+
+4. **Justify new files (only if necessary)**
+   - Document why existing cannot be extended
+   - Show consolidation benefits
+   - Follow existing architecture
+
+See `code_reuse.mdc` for comprehensive code reuse rules and mandatory process.
+
+---
+
+## Integration with Other Rules
+
+This file provides **execution rules and patterns** (how to write scripts, handle errors, etc.). For complete project workflow and technical approach, see:
+- `execution_workflow.mdc` - Complete technical workflow (Phase 0-6)
+- `code_reuse.mdc` - Code reuse requirements
+- `general.mdc` - General project rules
+- `rules.mdc` - Critical rules summary
+
+---
+
+**Remember**: The goal is reproducible, reliable, and maintainable pipelines. Always prioritize:
+1. **Code Reuse** - Analyze and reuse before creating (see `code_reuse.mdc`)
+2. **Correctness** - Check before doing
+3. **Efficiency** - Don't repeat work
+4. **Clarity** - Clear messages and documentation
+5. **Robustness** - Handle errors gracefully
+6. **Portability** - Work across environments
+7. **Idempotency** - Support resume/restart

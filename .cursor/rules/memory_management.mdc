@@ -1,0 +1,229 @@
+---
+alwaysApply: true
+---
+
+# Agent Memory Management Rules
+
+## COMPLIANCE CONFIRMED
+
+**I will actively use and maintain agent memory to preserve project context and improve long-term consistency.**
+
+## Core Principle: Maintain Project Memory
+
+Agent memory is critical for maintaining context across sessions. This rule defines how to use Cursor's memory features and other methods to improve agent memory.
+
+## Memory Management Strategies
+
+### 1. Cursor Memory Features (Primary Method)
+
+**When to Create Memories:**
+
+- ✅ **Project-Specific Decisions**: Important architectural decisions, design patterns
+- ✅ **User Preferences**: Coding style preferences, tool preferences, workflow preferences
+- ✅ **Common Issues and Solutions**: Recurring problems and their solutions
+- ✅ **Configuration Details**: Server IPs, credentials patterns, deployment specifics
+- ✅ **Template Patterns**: Reusable patterns for workflows, scripts, configurations
+- ✅ **Best Practices**: Project-specific best practices learned through experience
+
+**Memory Creation Guidelines:**
+
+1. **Be Specific**: Include exact details (file paths, commands, configurations)
+2. **Include Context**: Explain why the memory is important
+3. **Use Clear Language**: Write in English, be concise but complete
+4. **Update When Needed**: If a memory becomes outdated, update or delete it
+5. **Group Related Memories**: Use consistent naming patterns
+
+**Example Memory Format:**
+```
+Memory: "In the n8n workflow templates, all SSH nodes should use credential references (={{ $credentials.ssh }}) instead of hardcoded credentials. This pattern is used in templates/slurm_cluster_monitor/slurm_cluster_monitor_workflow.json."
+```
+
+### 2. Documentation as Memory (Secondary Method)
+
+**Documentation serves as persistent memory:**
+
+- **CHANGE_LOGS.md**: Records all changes with dates and reasons
+- **README.md**: Current project state and structure
+- **Template Documentation**: Template-specific patterns and decisions
+- **Troubleshooting Guides**: Solutions to common problems
+
+**Documentation Memory Best Practices:**
+
+1. **Update Immediately**: Update docs when making changes
+2. **Include Rationale**: Explain why decisions were made
+3. **Cross-Reference**: Link related documentation
+4. **Version Information**: Include dates and versions
+5. **Search-Friendly**: Use clear headings and keywords
+
+### 3. Code Comments as Memory
+
+**Use code comments to preserve context:**
+
+- **Why, not What**: Explain reasoning, not just what the code does
+- **Historical Context**: Note why certain approaches were chosen
+- **Gotchas**: Document known issues or workarounds
+- **Future Considerations**: Note potential improvements or limitations
+
+**Example:**
+```bash
+# Use unified architecture (single master SSH connection) to collect
+# status from all nodes. This approach was chosen to simplify configuration
+# for large clusters (see templates/slurm_cluster_monitor/CHANGE_LOGS.md)
+```
+
+### 4. Structured Data as Memory
+
+**Use structured files to maintain state:**
+
+- **Configuration Files**: Store current configurations
+- **Status Files**: Track current project state
+- **Checklist Files**: Track progress and requirements
+- **Index Files**: Maintain documentation structure
+
+## Memory Maintenance Workflow
+
+### Before Starting a Task
+
+1. **Read Documentation** (as per `general.mdc`)
+2. **Review Memories**: Check existing memories for relevant context
+3. **Search Documentation**: Use `codebase_search` to find related work
+4. **Check CHANGE_LOGS**: Review recent changes and their impact
+
+### During Task Execution
+
+1. **Create Memories**: When making important decisions or learning patterns
+2. **Update Documentation**: Keep docs current as you work
+3. **Note Patterns**: Identify reusable patterns for future reference
+4. **Document Rationale**: Explain why choices were made
+
+### After Completing a Task
+
+1. **Update CHANGE_LOGS.md**: Record what was done and why
+2. **Update README.md**: If structure or features changed
+3. **Create/Update Memories**: For important patterns or decisions
+4. **Update Template Docs**: If working on templates
+5. **Review and Clean**: Remove outdated memories or documentation
+
+## Memory Categories
+
+### Project-Level Memories
+
+- Architecture decisions
+- Infrastructure configurations
+- Deployment patterns
+- Common issues and solutions
+
+### Template-Level Memories
+
+- Template-specific patterns
+- Configuration requirements
+- Common user issues
+- Template evolution
+
+### Code-Level Memories
+
+- Reusable code patterns
+- Common functions and utilities
+- Configuration patterns
+- Best practices
+
+## Memory Quality Standards
+
+**Good Memories:**
+- ✅ Specific and actionable
+- ✅ Include file paths or code references
+- ✅ Explain the "why" not just "what"
+- ✅ Include context and examples
+- ✅ Are searchable and findable
+
+**Bad Memories:**
+- ❌ Too vague or generic
+- ❌ Missing context or rationale
+- ❌ Outdated or incorrect
+- ❌ Duplicate existing documentation
+- ❌ Too long or complex
+
+## Integration with Other Rules
+
+This memory management rule **integrates** with:
+
+- **general.mdc**: Documentation reading (uses memories)
+- **rules.mdc**: Documentation updates (creates memories)
+- **n8n_development.mdc**: Template patterns (memories for templates)
+- **code_reuse.mdc**: Code patterns (memories for code reuse)
+
+## Memory Review Process
+
+**Regular Memory Maintenance:**
+
+1. **Weekly Review**: Review memories for accuracy and relevance
+2. **After Major Changes**: Update or remove outdated memories
+3. **Before New Features**: Check if existing memories are still valid
+4. **Documentation Sync**: Ensure memories align with documentation
+
+**Memory Cleanup:**
+
+- Remove memories that are now documented in code/docs
+- Update memories when patterns change
+- Consolidate duplicate memories
+- Archive old memories if they're no longer relevant
+
+## Best Practices
+
+### 1. Prefer Documentation for Long-Term Memory
+
+- Use documentation for comprehensive information
+- Use memories for quick reference and patterns
+- Documentation is version-controlled, memories are not
+
+### 2. Create Memories for Patterns
+
+- Reusable code patterns
+- Common configuration patterns
+- Workflow design patterns
+- Troubleshooting patterns
+
+### 3. Update Memories Proactively
+
+- Don't wait for memories to become outdated
+- Update when you learn something new
+- Remove when no longer relevant
+
+### 4. Use Descriptive Memory Names
+
+- Include project context
+- Include the pattern or decision
+- Make it searchable
+
+**Example:**
+```
+Good: "n8n workflow SSH nodes should use credential references"
+Bad: "SSH configuration"
+```
+
+## Memory Creation Checklist
+
+Before creating a memory, ask:
+
+- [ ] Is this information already in documentation?
+- [ ] Is this a pattern that will be reused?
+- [ ] Is this a decision that affects future work?
+- [ ] Is this information specific and actionable?
+- [ ] Will this memory help in future sessions?
+
+If yes to 2+ questions, create the memory.
+
+## Memory Update Checklist
+
+When updating a memory:
+
+- [ ] Verify the information is still accurate
+- [ ] Check if related documentation needs updating
+- [ ] Ensure the memory is still relevant
+- [ ] Update or remove if outdated
+- [ ] Cross-reference with related memories
+
+---
+
+**Last Updated**: 2025-11-28  
+**Version**: 1.0

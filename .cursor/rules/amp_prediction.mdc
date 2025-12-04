@@ -1,0 +1,223 @@
+---
+alwaysApply: true
+---
+
+# Antimicrobial Peptide (AMP) Prediction Project Rules
+
+## COMPLIANCE CONFIRMED
+
+**I will follow the antimicrobial peptide prediction project framework. All model training, evaluation, and prediction tasks will reference this framework.**
+
+## Project Overview
+
+This project focuses on **deep learning-based antimicrobial peptide (AMP) prediction** using multiple neural network architectures. The goal is to classify peptide sequences as either antimicrobial (positive) or non-antimicrobial (negative).
+
+## Core Principles
+
+### 1. Model Architecture Support
+
+The project supports multiple deep learning architectures:
+
+- **Transformer**: Attention-based model (best accuracy: 0.9369)
+- **Transformer Enhanced**: Transformer with physicochemical features
+- **CNN**: Convolutional Neural Network (best AUC: 0.9843)
+- **LSTM**: Long Short-Term Memory
+- **GRU**: Gated Recurrent Unit
+- **MLP**: Multi-Layer Perceptron
+
+### 2. Training Framework
+
+**Training Process:**
+- Uses 5-fold cross-validation for robust evaluation
+- Reserves held-out test set (not used in CV)
+- Supports parallel training of multiple models/folds
+- Automatic result summarization and visualization
+
+**Data Organization:**
+- Training/validation: 9000 positive + 9000 negative samples (for CV)
+- Test set: Remaining samples (held-out for final evaluation)
+- Data splits stored in `data/cv_splits/`
+
+**Result Organization:**
+- Timestamped directories: `results/cv_YYYYMMDD_HHMMSS/`
+- Per-fold results: `fold_{1-5}/{model_type}/{timestamp}/`
+- Summary reports: `summary/RESULTS_SUMMARY.md`
+- Visualizations: `summary/figures/`
+- Training logs: `training.log`
+
+### 3. Model Evaluation Metrics
+
+**Primary Metrics:**
+- **Accuracy**: Overall classification accuracy
+- **Precision**: True positives / (True positives + False positives)
+- **Recall**: True positives / (True positives + False negatives)
+- **F1-Score**: Harmonic mean of precision and recall
+- **AUC-ROC**: Area under the ROC curve
+
+**Best Models (from cv_20251119_093042):**
+- **Best Accuracy**: Transformer (0.9369)
+- **Best AUC**: CNN (0.9843)
+- **Best Balanced**: MLP (0.9302 accuracy, 0.9819 AUC)
+
+### 4. Model Deployment
+
+**Model Storage:**
+- Best models stored in `models/` directory
+- Each model includes:
+  - Model checkpoint (`best.pth`)
+  - Model metadata (`model_info.json`)
+  - Performance metrics
+  - Usage documentation
+
+**Model Selection Criteria:**
+- Primary: Highest test set accuracy
+- Secondary: Highest AUC-ROC
+- Consideration: Model size and inference speed
+
+### 5. Prediction Workflow
+
+**Input Formats:**
+- Single sequence: Direct string input
+- Text file: One sequence per line
+- CSV file: Extract sequences from specified column (default: column E)
+
+**Prediction Output:**
+- Probability score (0.0 - 1.0): Likelihood of being antimicrobial
+- Binary prediction: Positive (>0.5) or Negative (≤0.5)
+- Confidence level: High (>0.8), Medium (0.5-0.8), Low (<0.5)
+
+**Prediction Reports:**
+- Summary statistics
+- Distribution of predictions
+- High-confidence candidates
+- Detailed per-sequence results
+
+### 6. Data Processing
+
+**Sequence Validation:**
+- Only standard 20 amino acids (A, C, D, E, F, G, H, I, K, L, M, N, P, Q, R, S, T, V, W, Y)
+- Minimum length: 5 amino acids
+- Maximum length: 200 amino acids (configurable)
+- Case-insensitive (automatically converted to uppercase)
+
+**Sequence Preprocessing:**
+- Remove non-standard characters
+- Handle modifications (e.g., oxidation, acetylation) by extracting base sequence
+- Pad/truncate to fixed length if required by model
+
+### 7. Code Structure
+
+**Key Modules:**
+- `src/model_factory.py`: Centralized model creation
+- `src/trainer/`: Training framework (BaseTrainer, PeptideTrainer, CVTrainer)
+- `src/trainer/evaluator.py`: Model evaluation
+- `src/trainer/visualizer.py`: Result visualization
+- `src/trainer/result_summarizer.py`: Report generation
+- `src/predict.py`: Single sequence/file prediction
+- `src/utils.py`: Utilities (tokenizer, dataset, validation)
+
+**Training Scripts:**
+- `src/train_cv.py`: Main cross-validation training script
+- `scripts/start_cv_training.sh`: Server training launcher
+- `scripts/summarize_results.py`: Standalone result summarization
+
+**Prediction Scripts:**
+- `src/predict.py`: Basic prediction (single/file)
+- `scripts/predict_csv.py`: CSV file prediction with report generation
+
+### 8. Configuration
+
+**Key Parameters (config.py):**
+- `DEVICE`: Auto-detected (MPS/CUDA/CPU)
+- `MAX_LENGTH`: Maximum sequence length
+- `BATCH_SIZE`: Prediction batch size
+- `VOCAB_SIZE`: Amino acid vocabulary size (21: 20 AA + padding)
+
+**Training Configuration:**
+- Epochs: 50 (default)
+- Batch size: 64
+- Learning rate: 0.0001
+- Optimizer: AdamW
+- Scheduler: Cosine annealing
+- Early stopping: Patience 10
+
+### 9. Best Practices
+
+**Model Training:**
+- Always use 5-fold CV for evaluation
+- Reserve test set for final evaluation only
+- Use timestamped result directories
+- Generate comprehensive summaries automatically
+- Save training history for analysis
+
+**Model Selection:**
+- Compare multiple architectures
+- Consider both accuracy and AUC
+- Evaluate on held-out test set
+- Document model selection rationale
+
+**Prediction:**
+- Always validate input sequences
+- Handle edge cases (empty sequences, invalid characters)
+- Provide confidence scores
+- Generate detailed reports for batch predictions
+
+**Code Quality:**
+- All code and documentation in English
+- Use type hints where appropriate
+- Include docstrings for all functions
+- Handle errors gracefully
+- Log important operations
+
+### 10. File Organization
+
+**Project Structure:**
+```
+Antibacterial_peptide/
+├── data/                    # Input data
+│   ├── cv_splits/          # Cross-validation data splits
+│   └── *.csv               # Mass spectrometry data files
+├── models/                  # Deployed models
+│   ├── transformer/        # Best transformer model
+│   ├── cnn/                # Best CNN model
+│   └── model_info.json     # Model metadata
+├── results/                 # Training results
+│   └── cv_YYYYMMDD_HHMMSS/ # Timestamped training runs
+├── src/                    # Source code
+│   ├── trainer/            # Training framework
+│   ├── model*.py           # Model definitions
+│   └── predict.py          # Prediction scripts
+├── scripts/                # Utility scripts
+└── docs/                   # Documentation
+```
+
+### 11. Current Best Models
+
+**From Training Run: cv_20251119_093042**
+
+| Model | Accuracy | Precision | Recall | F1 | AUC | Parameters |
+|-------|----------|-----------|--------|----|-----|------------|
+| Transformer | 0.9369 | 0.9488 | 0.9236 | 0.9360 | 0.9803 | 3.2M |
+| CNN | 0.9319 | 0.9483 | 0.9136 | 0.9306 | **0.9843** | 0.5M |
+| MLP | 0.9302 | 0.9274 | 0.9336 | 0.9305 | 0.9819 | 6.7M |
+
+**Recommended Model for Deployment:**
+- **Primary**: Transformer (best accuracy, good balance)
+- **Alternative**: CNN (best AUC, smallest model size)
+
+### 12. Integration with Other Rules
+
+This rule **extends** and **integrates** with:
+- `code_reuse.mdc` - Code reuse requirements
+- `pipeline_execution.mdc` - Execution patterns
+- `execution_workflow.mdc` - Technical workflow
+- `project_organization.mdc` - File organization
+- `general.mdc` - General development practices
+
+**All rules work together** to ensure comprehensive, reproducible, and well-documented AMP prediction workflows.
+
+---
+
+**Last Updated**: 2025-11-25  
+**Based on**: Training run cv_20251119_093042  
+**Status**: Active development

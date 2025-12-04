@@ -1,0 +1,25 @@
+name: plasmid_pipeline_env
+channels:
+  - defaults
+  - bioconda
+  - conda-forge
+dependencies:
+  # External command-line tools
+  - chopper
+  - flye
+  - medaka
+  - prokka
+  - nanoplot
+  - minimap2
+  - samtools
+  # Python and packages
+  - python=3.9
+  - pip
+  - pip:
+    - biopython
+    - pandas
+    - numpy
+    - matplotlib
+    - jinja2
+    - pysam
+    - dna_features_viewer 

@@ -1,0 +1,7 @@
+biopython
+pandas
+numpy
+matplotlib
+jinja2
+pysam
+dna_features_viewer 

@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Docker
+*.tar
+*.tar.gz
+
+# Logs
+*.log
+logs/
+
+# Output
+output/
+results/
+*.fasta
+*.fastq
+*.ab1
+*.pdf
+*.csv
+*.tsv
+*.yaml
+config.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+test_output*/
+final_test_output*/
+*.zip
+
+# Nextflow
+.nextflow/
+work/
+*.nextflow.log
+
+# Temporary files
+*.tmp
+*.temp

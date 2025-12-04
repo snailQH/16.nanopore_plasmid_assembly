@@ -1,0 +1,293 @@
+---
+alwaysApply: true
+---
+
+# Code Reuse and Consolidation Rules
+
+## COMPLIANCE CONFIRMED
+
+**I will prioritize reuse over creation. Every suggestion will reference existing code. New files require exhaustive justification.**
+
+## Core Principle: Reuse Before Create
+
+This is a **code reuse and consolidation project**. You must prove you can work within existing architecture.
+
+## Mandatory Process for Any Code Change
+
+### STEP 1: Analyze Existing Codebase FIRST
+
+**BEFORE suggesting anything new, you MUST:**
+
+1. **Search for existing implementations**
+   ```bash
+   # Use codebase_search to find similar functionality
+   # Use grep to find patterns
+   # Check all scripts in scripts/ directory
+   # Check main pipeline scripts: run_miRNA_quantification_*.sh
+   ```
+
+2. **Identify reusable components**
+   - Functions that can be shared
+   - Patterns that are repeated
+   - Configurations that are duplicated
+   - Utilities that exist elsewhere
+
+3. **Document findings**
+   - List specific files found
+   - Note what can be reused
+   - Explain why existing code cannot be extended (if proposing new)
+
+### STEP 2: Reference Existing Code
+
+**Every suggestion MUST:**
+- Reference specific file paths from the codebase
+- Quote relevant code sections
+- Explain how existing code relates to the request
+- Show what can be reused vs. what needs modification
+
+**Example format:**
+```
+Existing code in run_miRNA_quantification_mm39.sh (lines 40-57):
+[code reference]
+
+This pattern can be reused in [new context] by [specific modification]
+```
+
+### STEP 3: Justify New Files (If Necessary)
+
+**If creating new files is unavoidable, you MUST:**
+
+1. **Exhaustive reuse analysis**
+   - List all files checked
+   - Explain why each cannot be extended
+   - Show specific attempts to reuse existing code
+
+2. **Consolidation plan**
+   - Explain how new file consolidates duplicates
+   - Show what duplicate code it replaces
+   - Provide migration strategy from old to new
+
+3. **Architecture compliance**
+   - Show how new file fits existing structure
+   - Reference similar files in the codebase
+   - Follow existing naming conventions
+
+## Rules (Violating ANY Invalidates Response)
+
+### ❌ FORBIDDEN Actions
+
+1. **No new files without exhaustive reuse analysis**
+   - Must check all scripts/ files first
+   - Must check all utility functions
+   - Must check config files
+   - Must document why existing cannot be extended
+
+2. **No rewrites when refactoring is possible**
+   - Extend existing scripts before creating new ones
+   - Modify existing functions before duplicating
+   - Update existing configs before creating new ones
+
+3. **No generic advice - provide specific implementations**
+   - Must reference specific file paths
+   - Must show exact code changes
+   - Must provide working examples using existing code
+
+4. **No ignoring existing codebase architecture**
+   - Follow existing script structure (see `pipeline_execution.mdc`)
+   - Use existing configuration system
+   - Follow existing naming conventions
+   - Use existing utility functions
+
+### ✅ REQUIRED Actions
+
+1. **Extend existing services and components**
+   - Add functions to existing scripts
+   - Extend existing configuration
+   - Enhance existing utilities
+
+2. **Consolidate duplicate code**
+   - Identify duplicates across scripts
+   - Create shared functions
+   - Update all scripts to use shared code
+
+3. **Reference specific file paths**
+   - Always cite file:line references
+   - Quote relevant code sections
+   - Show exact locations
+
+4. **Provide migration strategies**
+   - How to move from duplicate to consolidated code
+   - How to update existing scripts
+   - How to maintain backward compatibility
+
+## Existing Codebase Architecture
+
+### Script Structure (MUST FOLLOW)
+
+All pipeline scripts follow this pattern (see `run_miRNA_quantification_mm39.sh`):
+```bash
+#!/bin/bash
+set -e
+
+# Configuration variables
+THREADS=16
+ADAPTER_SEQ_MIRNA="AACTGTAGGCACCATCAAT"
+MIN_LENGTH=15
+MAX_LENGTH=30
+
+# Database paths
+MIRBASE_DIR="/data4/liqh/microRNA-analysis-dev-1.0/mirbase"
+REFERENCE_DIR="/data1/reference"
+
+# Input/Output
+INPUT_DIR="01.rawdata"
+OUTDIR=results
+SCRIPT_DIR="$(dirname "$0")/scripts"
+```
+
+### Common Patterns (REUSE THESE)
+
+1. **File existence checking** (used in all pipeline scripts):
+   ```bash
+   if [ -f "${output_file}" ] && [ -s "${output_file}" ]; then
+       echo "  ✓ File already exists: $(basename "${output_file}")"
+       continue
+   fi
+   ```
+
+2. **Input file finding** (used in pipeline scripts):
+   ```bash
+   SAMPLES=($(find "${INPUT_DIR}" -name "*_R1.fastq.gz" | sed 's/.*\///; s/_R1\.fastq\.gz//' | sort -u))
+   ```
+
+3. **Output directory setup** (used in all pipeline scripts):
+   ```bash
+   mkdir -p ${OUTDIR}/01.qc ${OUTDIR}/02.mapping ${OUTDIR}/03.quantification ${OUTDIR}/04.novel ${OUTDIR}/logs
+   ```
+
+4. **Sample processing loop** (used in all pipeline scripts):
+   ```bash
+   for sample in "${SAMPLES[@]}"; do
+       echo ">>> Processing sample ${sample} ..."
+       # Process sample
+   done
+   ```
+
+### Existing Utility Scripts (REUSE OR EXTEND)
+
+- `scripts/mirna_quantification_merger_v2.py` - Merge quantification results
+- `scripts/mirna_pipeline_stats_merger.py` - Collect pipeline statistics
+- `scripts/collect_mapping_stats.py` - Collect mapping statistics
+- `scripts/generate_test_data.py` - Generate test sequencing data
+
+## Implementation Checklist
+
+Before suggesting ANY code change:
+
+- [ ] Searched existing scripts for similar functionality
+- [ ] Checked utility scripts for reusable functions
+- [ ] Reviewed configuration files for existing parameters
+- [ ] Identified specific files that can be extended
+- [ ] Documented why new code is necessary (if applicable)
+- [ ] Provided file:line references for existing code
+- [ ] Showed how to reuse existing patterns
+- [ ] Explained consolidation strategy (if creating new)
+
+## Validation Checkpoints
+
+Throughout your response, include:
+
+1. **Code references**: Show existing code with file:line format
+2. **Reuse justification**: Explain what can be reused
+3. **Extension points**: Show where existing code can be extended
+4. **Migration path**: How to integrate changes
+
+## Response Format Requirements
+
+### When Extending Existing Code
+
+```
+EXISTING CODE ANALYSIS:
+- Found similar functionality in: run_miRNA_quantification_mm39.sh (lines YY-ZZ)
+- Can be extended by: [specific modification]
+- Reusable pattern: [quote pattern]
+
+PROPOSED CHANGE:
+- File: run_miRNA_quantification_mm39.sh
+- Lines to modify: YY-ZZ
+- Change: [specific code change]
+- Reason: [why this is better than creating new]
+```
+
+### When Creating New Code (Only if Unavoidable)
+
+```
+EXHAUSTIVE REUSE ANALYSIS:
+1. Checked run_miRNA_quantification_*.sh: [result]
+2. Checked scripts/*.py: [result]
+3. Checked scripts/*.sh: [result]
+4. Checked config files: [result]
+
+WHY EXISTING CANNOT BE EXTENDED:
+- Reason 1: [specific]
+- Reason 2: [specific]
+
+CONSOLIDATION BENEFIT:
+- Replaces duplicate code in: [files]
+- Consolidates: [what]
+
+ARCHITECTURE COMPLIANCE:
+- Follows structure from: [reference file]
+- Uses config from: [reference]
+- Naming follows: [convention]
+```
+
+## Examples of Good vs. Bad
+
+### ❌ BAD: Creating new file without analysis
+```
+"I'll create a new script for merging quantification results"
+```
+
+### ✅ GOOD: Reusing existing code
+```
+"Found existing merger in scripts/mirna_quantification_merger_v2.py (lines 15-45).
+Can extend this by adding [specific function] at line 46.
+Reusable pattern from run_miRNA_quantification_mm39.sh (lines 30-50) can be adapted."
+```
+
+### ❌ BAD: Generic suggestion
+```
+"Add error handling to the script"
+```
+
+### ✅ GOOD: Specific implementation
+```
+"Extend error handling in run_miRNA_quantification_mm39.sh (lines 45-50)
+by adding the pattern from scripts/mirna_pipeline_stats_merger.py (lines 28-32):
+[code quote]"
+```
+
+## Integration with Existing Rules
+
+This code reuse rule **extends** the existing rules in:
+- `pipeline_execution.mdc` - File existence checking (already implemented)
+- `general.mdc` - Code quality standards
+- `rules.mdc` - Critical rules summary
+
+**All existing rules still apply. This adds the requirement to analyze and reuse before creating.**
+
+## Final Compliance Check
+
+Before submitting any response:
+
+1. ✅ Analyzed existing codebase
+2. ✅ Referenced specific files
+3. ✅ Justified any new files
+4. ✅ Showed reuse opportunities
+5. ✅ Provided specific implementations
+6. ✅ Followed existing architecture
+
+---
+
+**Remember**: If you suggest creating new files, explain why existing files cannot be extended. If you recommend rewrites, justify why refactoring won't work. Always reference specific file paths and code sections.

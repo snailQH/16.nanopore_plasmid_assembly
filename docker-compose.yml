@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  nanopore-plasmid-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nanopore-plasmid-pipeline:latest
+    volumes:
+      # Mount input directory (fast_pass folder)
+      - ./fast_pass:/data/input/fast_pass:ro
+      # Mount output directory
+      - ./output:/data/output
+      # Optional: mount config directory
+      - ./config:/data/config
+    environment:
+      - TZ=UTC
+    # Override entrypoint to run pipeline
+    command: >
+      --input /data/input
+      --output /data/output
+      --project-id docker_test
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+

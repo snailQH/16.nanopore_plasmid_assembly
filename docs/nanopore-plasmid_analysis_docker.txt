@@ -1,0 +1,1841 @@
+#Planning for the whole pipeline
+we are developing a docker image, which will be used to do plasmid sequencing based on nanopore sequenced fastq file(which will be a fast_pass folder, just like the output of a nanopore sequencing run);
+step1: Get fast_pass folder from nanopore sequencing run;
+step2: Assembly all the fastq files in the fast_pass folder, using flye or canu; Each sub folder in fast_pass means a different plasmid sample. This step will generate a fasta file for each plasmid sample;
+step3: Use 
+
+
+(base) bioinfo@ampseq01:~$ docker pull ubuntu 
+Using default tag: latest
+latest: Pulling from library/ubuntu
+20043066d3d5: Pull complete 
+Digest: sha256:c35e29c9450151419d9448b0fd75374fec4fff364a27f176fb458d472dfc9e54
+Status: Downloaded newer image for ubuntu:latest
+docker.io/library/ubuntu:latest
+(base) bioinfo@ampseq01:~$ 
+
+docker run --rm -it -v /data4:/data4 ubuntu
+(base) bioinfo@ampseq01:~$ cp -r  /opt/scripts /data4/liqh/scripts-test
+root@4705e76e34de:/# cp -r /data4/liqh/scripts-test /opt/scripts
+apt update
+apt install -y git 
+
+
+#https://github.com/hyraxbio/hyraxAbif?tab=readme-ov-file
+cd /opt/
+git clone https://github.com/hyraxbio/hyraxAbif.git
+cd /opt/hyraxAbif
+apt-get install -y haskell-stack
+make build
+#报错,在stack.yaml file中添加额外2行
+extra-deps:
+  - stm-2.5.3.1@sha256:421b57c9cdf55b4977e9445336be3895ba0c8d92b6ec6e474f140e173270d9dd,2443
+  - verset-0.0.1.11
+
+#再执行更新:
+stack update
+stack build
+
+#再编译:
+#root@4705e76e34de:/opt/hyraxAbif# 
+make build
+STACK_YAML="stack.yaml" stack build hyraxAbif --no-run-tests
+Getting project config file from STACK_YAML environment
+
+#test function of hyraxAbif: 
+root@4705e76e34de:/opt/hyraxAbif# cp /data4/liqh/scripts-test/U*fasta ./demo_data/
+root@4705e76e34de:/opt/hyraxAbif# ll demo_data/
+total 40
+drwxr-xr-x  2 root root 4096 Dec  1 06:51 ./
+drwxr-xr-x 10 root root 4096 Dec  1 06:41 ../
+-rwxr-xr-x  1 root root 6821 Dec  1 06:51 UPA42701.final.fasta
+-rwxr-xr-x  1 root root 6858 Dec  1 06:51 UPA42703.final.fasta*
+-rwxr-xr-x  1 root root 7493 Dec  1 06:51 UPA42705.final.fasta*
+-rwxr-xr-x  1 root root 6821 Dec  1 06:51 UPA42742.final.fasta*
+root@4705e76e34de:/opt/hyraxAbif# 
+root@4705e76e34de:/opt/hyraxAbif# apt install -y python3 python3-pip
+root@4705e76e34de:/opt/hyraxAbif# ln -s /usr/bin/python3 /usr/local/bin/python
+#pip3 install biopython ,  error
+root@4705e76e34de:/opt/hyraxAbif# apt-get install -y python3-biopython
+
+
+python /opt/scripts/split_plasmid_fasta.py demo_data/UPA42701.final.fasta demo_data/UPA42701_2k_fragmented/
+#[OK] Wrote demo_data/UPA42701_2k_fragmented/1.0_part1.fasta (2000 bp)
+#[OK] Wrote demo_data/UPA42701_2k_fragmented/1.0_part2.fasta (2000 bp)
+#[OK] Wrote demo_data/UPA42701_2k_fragmented/1.0_part3.fasta (2000 bp)
+#[OK] Wrote demo_data/UPA42701_2k_fragmented/1.0_part4.fasta (814 bp)
+
+#升级脚本;
+python /opt/scripts/split_plasmid_fasta.py --input demo_data/UPA42701.final.fasta --outdir demo_data/UPA42701_2k_fragmented  --sample UPA42701  --size 2000
+[OK] Wrote demo_data/UPA42701_2k_fragmented/UPA42701_1.0_part1.fasta (2000 bp)
+[OK] Wrote demo_data/UPA42701_2k_fragmented/UPA42701_1.0_part2.fasta (2000 bp)
+[OK] Wrote demo_data/UPA42701_2k_fragmented/UPA42701_1.0_part3.fasta (2000 bp)
+[OK] Wrote demo_data/UPA42701_2k_fragmented/UPA42701_1.0_part4.fasta (814 bp)
+
+
+/opt/hyraxAbif/hyraxAbif-exe gen demo_data//UPA42701_2k_fragmented demo_data/UPA42701_2k_fragmented_ab1  
+root@4705e76e34de:/opt/hyraxAbif# ll demo_data/UPA42701_2k_fragmented_ab1
+total 568
+drwxr-xr-x 2 root root   4096 Dec  1 07:08 ./
+drwxr-xr-x 5 root root   4096 Dec  1 06:59 ../
+-rw-r--r-- 1 root root 166591 Dec  1 07:07 UPA42701_1.0_part1.ab1
+-rw-r--r-- 1 root root 166591 Dec  1 07:07 UPA42701_1.0_part2.ab1
+-rw-r--r-- 1 root root 166591 Dec  1 07:07 UPA42701_1.0_part3.ab1
+-rw-r--r-- 1 root root  68153 Dec  1 07:07 UPA42701_1.0_part4.ab1
+
+#finish installing hyraxAbif which will be used to generate ab1 files based on input fasta files.
+
+
+##############apt install nanofiltapt install nanofiltapt install nanofiltapt install nanofilt
+#root@4705e76e34de:/opt/hyraxAbif# 
+apt install -y python3-matplotlib nanofilt
+
+#filter heading base and low quality base,short reads;
+gunzip -c reads.fastq.gz | NanoFilt -l 100 -q 12 --headcrop 50 | gzip > ${SAMPLE}.filtered.fastq.gz
+
+
+
+
+python3 /opt/scripts/generate_complete_reports.py -d ../output -o ../results --project-id final_reports
+
+
+
+
+
+##########################################################################################################################################################################################################################################################################
+(base) bioinfo@ampseq01:~$ tree  /mnt/AMPSEQ-SFTP/sftp-home/ct_ampseq/upload/Plasmid/fast_pass
+/mnt/AMPSEQ-SFTP/sftp-home/ct_ampseq/upload/Plasmid/fast_pass
+├── U0022772G0-13-UPA53974
+│   ├── PBG13417_pass_U0022772G0-13-UPA53974_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U0022772G0-13-UPA53974_f4cf4181_c5be703c_1.fastq.gz
+├── U1089XVPG0-144-UPA53579
+│   ├── PBG13417_pass_U1089XVPG0-144-UPA53579_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U1089XVPG0-144-UPA53579_f4cf4181_c5be703c_1.fastq.gz
+├── U1335061G0-105-UPA52629
+│   ├── PBG13417_pass_U1335061G0-105-UPA52629_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U1335061G0-105-UPA52629_f4cf4181_c5be703c_1.fastq.gz
+├── U561P334G0-3-UPA51888
+│   ├── PBG13417_pass_U561P334G0-3-UPA51888_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U561P334G0-3-UPA51888_f4cf4181_c5be703c_1.fastq.gz
+├── U6418977G0-33-UPA52775
+│   ├── PBG13417_pass_U6418977G0-33-UPA52775_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U6418977G0-33-UPA52775_f4cf4181_c5be703c_1.fastq.gz
+├── U7709840G0-1-UPA54110
+│   ├── PBG13417_pass_U7709840G0-1-UPA54110_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U7709840G0-1-UPA54110_f4cf4181_c5be703c_1.fastq.gz
+└── U8461027G0-775-UPA51877
+    ├── PBG13417_pass_U8461027G0-775-UPA51877_f4cf4181_c5be703c_0.fastq.gz
+    └── PBG13417_pass_U8461027G0-775-UPA51877_f4cf4181_c5be703c_1.fastq.gz
+
+8 directories, 14 files
+(base) bioinfo@ampseq01:~$ cp -r  /mnt/AMPSEQ-SFTP/sftp-home/ct_ampseq/upload/Plasmid/fast_pass /data4/liqh/scripts-test/
+
+
+##########################################################################################################################################################################################################################################################################
+
+
+
+
+需要:
+rawfastq;
+fasta,
+gbk,
+一代测序的信号图(ab1);
+pdf size-distribution(目前客户主要要的),
+然后还有coverage;
+目前只有一个客户, 生成了都在一个folder中;
+按照客户名, 有独立的folder, 然后按照日项目号, 再有子目录(根据order-id来命名, 再加客户名,再加日期, ID123-QHLI-112525);
+
+input data: plasmid/fast-pass, 就是和下机数据一样的目录;
+在它的子folder中;
+```bash
+(base) bioinfo@ampseq01:/mnt/AMPSEQ-SFTP/sftp-home/ct_ampseq/upload/Plasmid/fast_pass$ tree ./
+./
+├── U0022772G0-13-UPA53974
+│   ├── PBG13417_pass_U0022772G0-13-UPA53974_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U0022772G0-13-UPA53974_f4cf4181_c5be703c_1.fastq.gz
+├── U1089XVPG0-144-UPA53579
+│   ├── PBG13417_pass_U1089XVPG0-144-UPA53579_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U1089XVPG0-144-UPA53579_f4cf4181_c5be703c_1.fastq.gz
+├── U1335061G0-105-UPA52629
+│   ├── PBG13417_pass_U1335061G0-105-UPA52629_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U1335061G0-105-UPA52629_f4cf4181_c5be703c_1.fastq.gz
+├── U561P334G0-3-UPA51888
+│   ├── PBG13417_pass_U561P334G0-3-UPA51888_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U561P334G0-3-UPA51888_f4cf4181_c5be703c_1.fastq.gz
+├── U6418977G0-33-UPA52775
+│   ├── PBG13417_pass_U6418977G0-33-UPA52775_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U6418977G0-33-UPA52775_f4cf4181_c5be703c_1.fastq.gz
+├── U7709840G0-1-UPA54110
+│   ├── PBG13417_pass_U7709840G0-1-UPA54110_f4cf4181_c5be703c_0.fastq.gz
+│   └── PBG13417_pass_U7709840G0-1-UPA54110_f4cf4181_c5be703c_1.fastq.gz
+└── U8461027G0-775-UPA51877
+    ├── PBG13417_pass_U8461027G0-775-UPA51877_f4cf4181_c5be703c_0.fastq.gz
+    └── PBG13417_pass_U8461027G0-775-UPA51877_f4cf4181_c5be703c_1.fastq.gz
+
+8 directories, 14 files
+(base) bioinfo@ampseq01:/mnt/AMPSEQ-SFTP/sftp-home/ct_ampseq/upload/Plasmid/fast_pass$ 
+
+
+##########################################################################################################################################################################################################################################################################
+好——我把之前的 QC-only 脚本扩展成完整、可批量运行、按样品输出独立结果目录的生产级 Bash pipeline，覆盖你要的：
+QC（NanoFilt）→ 可选 Filtlong → 组装（Flye）→ 圆化（Circlator）→ Racon 多轮抛光 → Medaka 最终抛光 → 注释（Prokka）→ 映射质控 → 总结表。
+
+脚本要点（设计原则）：
+	•	接受一个输入目录（默认 fast_pass），每个样品为子目录，子目录内可含多个 *.fastq.gz。
+	•	每个样品单独输出到 ${OUTDIR}/${SAMPLE} 下，所有中间产物与最终结果都保留（便于审计）。
+	•	参数化：可设置 headcrop、min_len、min_q、genome_size、racon_rounds、threads、medaka_model 等。
+	•	失败即中断（set -euo pipefail），并带清晰日志。
+	•	在开始前检查所需工具是否可用。
+	•	生成 summary.tsv 汇总每个样品的关键信息。
+
+保存为 plasmid_full_pipeline.sh 并给可执行权限 chmod +x plasmid_full_pipeline.sh，直接挂在服务器上运行。
+
+⸻
+
+使用范例
+
+默认运行（使用当前目录下 fast_pass）：
+
+./plasmid_full_pipeline.sh
+
+自定义输入输出与参数示例：
+
+./plasmid_full_pipeline.sh \
+  --indir /mnt/AMPSEQ-SFTP/.../fast_pass \
+  --outdir /data/plasmid_results \
+  --genome-size 12k \
+  --headcrop 50 \
+  --min_len 1000 \
+  --min_q 12 \
+  --racon_rounds 2 \
+  --threads 16 \
+  --medaka_model r1041_e82_260bps_sup
+
+
+⸻
+
+完整脚本：plasmid_full_pipeline.sh
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+# plasmid_full_pipeline.sh
+# Full ONT plasmid assembly pipeline: NanoFilt -> (Filtlong) -> Flye -> Circlator -> Racon xN -> Medaka -> Prokka -> mapping QC
+# Author: ChatGPT
+# Usage: ./plasmid_full_pipeline.sh [--indir DIR] [--outdir DIR] [--threads N] ...
+
+# ----------------------
+# Default params
+# ----------------------
+INDIR="fast_pass"
+OUTDIR="plasmid_results"
+HEADCROP=50
+MIN_LEN=100
+MIN_Q=12
+GENOME_SIZE="10k"
+RACON_ROUNDS=2
+THREADS=8
+MEDAKA_MODEL="r1041_e82_260bps_sup"
+USE_FITLONG=false   # set true to run filtlong after NanoFilt
+FILTKEEPPCT=90
+
+# ----------------------
+# Help / parse args
+# ----------------------
+print_help(){
+  cat <<'HELP'
+plasmid_full_pipeline.sh - full nanopore plasmid assembly pipeline
+
+Options:
+  --indir DIR          Input directory containing sample subfolders (default: fast_pass)
+  --outdir DIR         Output base directory (default: plasmid_results)
+  --headcrop N         NanoFilt headcrop (default: 50)
+  --min_len N          NanoFilt min read length (default: 100)
+  --min_q N            NanoFilt min avg Q (default: 12)
+  --genome-size SIZE   Flye genome size estimate (eg. 10k or 12k) (default: 10k)
+  --racon_rounds N     Number of Racon rounds (default: 2)
+  --threads N          Number of threads (default: 8)
+  --medaka_model STR   Medaka model (default: r1041_e82_260bps_sup)
+  --use-filtlong       Enable filtlong after NanoFilt (default: disabled)
+  --help               Show this help and exit
+
+Example:
+  ./plasmid_full_pipeline.sh --indir /mnt/.../fast_pass --outdir /data/plasmid_results --threads 16
+HELP
+}
+
+# basic arg parsing
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --indir) INDIR="$2"; shift 2;;
+    --outdir) OUTDIR="$2"; shift 2;;
+    --headcrop) HEADCROP="$2"; shift 2;;
+    --min_len) MIN_LEN="$2"; shift 2;;
+    --min_q) MIN_Q="$2"; shift 2;;
+    --genome-size) GENOME_SIZE="$2"; shift 2;;
+    --racon_rounds) RACON_ROUNDS="$2"; shift 2;;
+    --threads) THREADS="$2"; shift 2;;
+    --medaka_model) MEDAKA_MODEL="$2"; shift 2;;
+    --use-filtlong) USE_FITLONG=true; shift 1;;
+    --help) print_help; exit 0;;
+    *) echo "Unknown arg: $1"; print_help; exit 1;;
+  esac
+done
+
+# ----------------------
+# Tool checks
+# ----------------------
+req_tools=(gunzip NanoFilt filtlong flye circlator minimap2 samtools racon medaka_consensus prokka)
+missing=()
+for t in "${req_tools[@]}"; do
+  if ! command -v $t &>/dev/null; then
+    missing+=("$t")
+  fi
+done
+
+if [[ ${#missing[@]} -ne 0 ]]; then
+  echo "[ERROR] Missing required tools: ${missing[*]}"
+  echo "Please install them before running the pipeline."
+  exit 1
+fi
+
+# ----------------------
+# Setup output structure
+# ----------------------
+mkdir -p "${OUTDIR}"
+SUMMARY="${OUTDIR}/summary.tsv"
+echo -e "sample\tfinal_fasta\tcontig_count\tmax_contig_len\tassembly_method\tnotes" > "${SUMMARY}"
+
+echo "[INFO] Input dir: ${INDIR}"
+echo "[INFO] Output dir: ${OUTDIR}"
+echo "[INFO] Threads: ${THREADS}"
+echo "[INFO] NanoFilt: headcrop=${HEADCROP}, min_len=${MIN_LEN}, min_q=${MIN_Q}"
+echo "[INFO] Flye genome size: ${GENOME_SIZE}"
+echo "[INFO] Racon rounds: ${RACON_ROUNDS}"
+echo "[INFO] Use filtlong: ${USE_FITLONG}"
+echo
+
+# ----------------------
+# Per-sample processing
+# ----------------------
+for SAMPLE_DIR in "${INDIR}"/*; do
+  [[ -d "${SAMPLE_DIR}" ]] || continue
+  SAMPLE=$(basename "${SAMPLE_DIR}")
+  echo "==========================================="
+  echo "[START SAMPLE] ${SAMPLE}"
+  echo "==========================================="
+
+  SAMPLE_OUT="${OUTDIR}/${SAMPLE}"
+  mkdir -p "${SAMPLE_OUT}"
+  mkdir -p "${SAMPLE_OUT}/00.raw" "${SAMPLE_OUT}/01.qc" "${SAMPLE_OUT}/02.assembly" "${SAMPLE_OUT}/03.circlator" "${SAMPLE_OUT}/04.polish" "${SAMPLE_OUT}/05.annotation" "${SAMPLE_OUT}/06.mapping_qc"
+
+  # gather fastq.gz files
+  FASTQ_FILES=("${SAMPLE_DIR}"/*.fastq.gz)
+  if [[ ${#FASTQ_FILES[@]} -eq 0 ]]; then
+    echo "[WARN] No fastq.gz files found in ${SAMPLE_DIR}, skipping."
+    continue
+  fi
+
+  # create merged raw fastq (uncompressed) to work with downstream tools
+  RAW_MERGED="${SAMPLE_OUT}/00.raw/${SAMPLE}.raw.fastq"
+  echo "[STEP] Merging raw fastq -> ${RAW_MERGED}"
+  gunzip -c "${FASTQ_FILES[@]}" > "${RAW_MERGED}"
+
+  # ----------------------
+  # Step 1: NanoFilt (headcrop, length, quality)
+  # ----------------------
+  FILTERED="${SAMPLE_OUT}/01.qc/${SAMPLE}.filtered.fastq.gz"
+  echo "[STEP] NanoFilt -> ${FILTERED}"
+  gunzip -c "${RAW_MERGED}" \
+    | NanoFilt --headcrop ${HEADCROP} -l ${MIN_LEN} -q ${MIN_Q} --verbose \
+    | gzip > "${FILTERED}"
+
+  CLEAN_FASTQ="${SAMPLE_OUT}/01.qc/${SAMPLE}.clean.fastq"
+  gunzip -c "${FILTERED}" > "${CLEAN_FASTQ}"
+
+  # optional: filtlong to keep best reads (helps if many short/low-quality)
+  if [[ "${USE_FITLONG}" == true ]]; then
+    echo "[STEP] filtlong (keep_percent=${FILTKEEPPCT}) -> ${SAMPLE_OUT}/01.qc/${SAMPLE}.filtlong.fastq"
+    filtlong --min_length ${MIN_LEN} --keep_percent ${FILTKEEPPCT} "${CLEAN_FASTQ}" > "${SAMPLE_OUT}/01.qc/${SAMPLE}.filtlong.fastq"
+    CLEAN_FASTQ="${SAMPLE_OUT}/01.qc/${SAMPLE}.filtlong.fastq"
+  fi
+
+  # ----------------------
+  # Step 2: Flye assembly (plasmid-aware)
+  # ----------------------
+  echo "[STEP] Flye assembly (genome-size ${GENOME_SIZE})"
+  flye --nano-raw "${CLEAN_FASTQ}" --out-dir "${SAMPLE_OUT}/02.assembly" --genome-size ${GENOME_SIZE} --threads ${THREADS} --plasmids
+
+  ASM="${SAMPLE_OUT}/02.assembly/assembly.fasta"
+  if [[ ! -f "${ASM}" ]]; then
+    echo "[ERROR] Flye assembly failed for ${SAMPLE}"
+    echo -e "${SAMPLE}\tNA\t0\t0\tflye\tflye_failed" >> "${SUMMARY}"
+    continue
+  fi
+
+  # ----------------------
+  # Step 3: Circlator circularization (if available)
+  # ----------------------
+  echo "[STEP] Circlator circularization"
+  circlator all "${ASM}" "${CLEAN_FASTQ}" "${SAMPLE_OUT}/03.circlator" || {
+    echo "[WARN] Circlator failed (nonfatal). Continuing with Flye assembly."
+  }
+
+  # Use circlator result if exists, else use flye assembly
+  if [[ -f "${SAMPLE_OUT}/03.circlator/06.fixstart.fasta" ]]; then
+    CIRCULAR="${SAMPLE_OUT}/03.circlator/06.fixstart.fasta"
+    echo "[INFO] Using circlator output: ${CIRCULAR}"
+  else
+    CIRCULAR="${ASM}"
+    echo "[INFO] Circlator output not found; using Flye assembly: ${CIRCULAR}"
+  fi
+
+  # ----------------------
+  # Step 4: Racon polishing (iterative)
+  # ----------------------
+  POLISHED_RACON="${SAMPLE_OUT}/04.polish/racon_round0.fasta"
+  cp "${CIRCULAR}" "${POLISHED_RACON}"
+
+  for (( r=1; r<=RACON_ROUNDS; r++ )); do
+    echo "[STEP] Racon round ${r}"
+    aln="${SAMPLE_OUT}/04.polish/aln_round${r}.sam"
+    minimap2 -ax map-ont "${POLISHED_RACON}" "${CLEAN_FASTQ}" > "${aln}"
+    racon "${CLEAN_FASTQ}" "${aln}" "${POLISHED_RACON}" > "${SAMPLE_OUT}/04.polish/racon_round${r}.fasta"
+    POLISHED_RACON="${SAMPLE_OUT}/04.polish/racon_round${r}.fasta"
+    # cleanup intermediate sam to save space
+    rm -f "${aln}"
+  done
+
+  # ----------------------
+  # Step 5: Medaka consensus (final polishing)
+  # ----------------------
+  echo "[STEP] Medaka polishing"
+  MEDAKA_OUTDIR="${SAMPLE_OUT}/04.polish/medaka"
+  mkdir -p "${MEDAKA_OUTDIR}"
+  medaka_consensus -i "${CLEAN_FASTQ}" -d "${POLISHED_RACON}" -o "${MEDAKA_OUTDIR}" -m "${MEDAKA_MODEL}"
+  FINAL_FASTA="${MEDAKA_OUTDIR}/consensus.fasta"
+
+  if [[ ! -f "${FINAL_FASTA}" ]]; then
+    echo "[ERROR] Medaka failed to produce consensus for ${SAMPLE}"
+    echo -e "${SAMPLE}\tNA\t0\t0\tmedaka_failed\tmedaka_failed" >> "${SUMMARY}"
+    continue
+  fi
+
+  # ----------------------
+  # Step 6: Prokka annotation
+  # ----------------------
+  echo "[STEP] Prokka annotation"
+  prokka --outdir "${SAMPLE_OUT}/05.annotation" --prefix "${SAMPLE}" --cpus ${THREADS} "${FINAL_FASTA}" >/dev/null 2>&1 || {
+    echo "[WARN] Prokka failed or had warnings; check logs."
+  }
+
+  # ----------------------
+  # Step 7: Mapping QC (map reads back to final contigs)
+  # ----------------------
+  echo "[STEP] Mapping QC"
+  MAPPED_BAM="${SAMPLE_OUT}/06.mapping_qc/${SAMPLE}.mapped.bam"
+  minimap2 -ax map-ont "${FINAL_FASTA}" "${CLEAN_FASTQ}" | samtools sort -@ ${THREADS} -o "${MAPPED_BAM}"
+  samtools index "${MAPPED_BAM}"
+  samtools depth "${MAPPED_BAM}" > "${SAMPLE_OUT}/06.mapping_qc/depth.txt"
+
+  # compute contig stats
+  CONTIG_COUNT=$(grep -c "^>" "${FINAL_FASTA}" || echo 0)
+  MAX_CONTIG_LEN=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen+=length($0)} END{print seqlen}' "${FINAL_FASTA}" | sort -nr | head -n1 || echo 0)
+
+  NOTES="ok"
+  ASSEMBLY_METHOD="flye+polish"
+  echo -e "${SAMPLE}\t${FINAL_FASTA}\t${CONTIG_COUNT}\t${MAX_CONTIG_LEN}\t${ASSEMBLY_METHOD}\t${NOTES}" >> "${SUMMARY}"
+
+  echo "[DONE SAMPLE] ${SAMPLE}"
+  echo
+done
+
+echo "[ALL DONE] Summary written to ${SUMMARY}"
+
+
+⸻
+
+关于脚本的若干说明（务必阅读）
+	1.	工具安装：脚本假定 NanoFilt, filtlong (可选), flye, circlator, minimap2, samtools, racon, medaka_consensus, prokka 都已安装且在 PATH 中。脚本在开头会检查必需工具并报错退出。
+	2.	Medaka 模型：请根据你的 flowcell / basecaller 选择合适模型（常见为 r1041_e82_260bps_sup 或 r941_min_high_g360 等），若不确定保持默认并检查 medaka 文档。
+	3.	Racon 轮数：默认 2 轮；可改为 3 轮，但收益递减。
+	4.	输入文件：每个样品子目录中允许有多个 fastq.gz 文件（例如 split by run），脚本会合并后一起处理。
+	5.	资源：在 HPC/SLURM 上运行时可把这脚本 wrap 成 sbatch 作业，或把 per-sample 循环改写为并行 & 或 GNU parallel（注意 IO 压力）。
+	6.	容错：flye 或 medaka 失败会在 summary 中写入标识并继续下一个样品（部分步骤失败会跳过后续步骤）。
+	7.	输出：每个样品的最终 consensus 存在 ${OUTDIR}/${SAMPLE}/04.polish/medaka/consensus.fasta，注释存放在 05.annotation，mapping depth 在 06.mapping_qc/depth.txt。
+	8.	可扩展：如需添加 medaka variant 来调用SNP/indel、Bandage 图可视化、或直接打包为 Nextflow / Snakemake / Argo，我可以在此基础上生成。
+
+⸻
+
+如果你要我做下一步，我可以立刻（在当前响应中）：
+	•	把这个脚本改为 SLURM sbatch 版本（每个样品提交独立作业），或
+	•	把它转换为 Nextflow / Snakemake workflow（便于可复现与并行化），或
+	•	增加 variant calling（medaka variant） + summary report（包含突变列表、覆盖图），或
+	•	添加 自动邮件通知 / QC 报告（HTML）。
+
+你想先要哪个扩展？
+##########################################################################################################################################################################################################################################################################
+
+##########################################################################################################################################################################################################################################################################
+
+##########################################################################################################################################################################################################################################################################
+
+
+完整升级版 split_plasmid_fasta.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+split_plasmid_fasta.py
+------------------------------------
+Split plasmid FASTA sequences into fixed-length fragments.
+Support specifying input/output/sample name through command-line arguments.
+
+Usage:
+    python split_plasmid_fasta.py --input INPUT.fasta --outdir OUTDIR [--sample SAMPLE] [--size 2000]
+
+Example:
+    python split_plasmid_fasta.py --input plasmid.fasta --outdir fragments --sample test01
+"""
+
+import os
+import argparse
+from Bio import SeqIO
+
+DEFAULT_FRAGMENT_SIZE = 2000  # bp
+
+
+def split_fasta(input_fasta, output_dir, sample_name=None, fragment_size=DEFAULT_FRAGMENT_SIZE):
+    """Split each FASTA sequence into smaller fragments."""
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    for record in SeqIO.parse(input_fasta, "fasta"):
+        seq = record.seq
+        seq_len = len(seq)
+
+        for i in range(0, seq_len, fragment_size):
+            fragment = seq[i:i + fragment_size]
+            part_num = (i // fragment_size) + 1
+
+            # output name supports sample name
+            if sample_name:
+                fragment_id = f"{sample_name}_{record.id}_part{part_num}"
+            else:
+                fragment_id = f"{record.id}_part{part_num}"
+
+            output_path = os.path.join(output_dir, f"{fragment_id}.fasta")
+
+            # Write fragment
+            with open(output_path, "w") as out_f:
+                out_f.write(">1.0\n")
+                for j in range(0, len(fragment), 80):
+                    out_f.write(str(fragment[j:j + 80]) + "\n")
+
+            print(f"[OK] Wrote {output_path} ({len(fragment)} bp)")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Split plasmid FASTA into fixed-length fragments.")
+
+    parser.add_argument("--input", "-i", required=True, help="Input FASTA file")
+    parser.add_argument("--outdir", "-o", required=True, help="Output directory")
+    parser.add_argument("--sample", "-s", default=None, help="Sample name prefix for output files")
+    parser.add_argument("--size", "-l", type=int, default=DEFAULT_FRAGMENT_SIZE,
+                        help="Fragment size (default: 2000 bp)")
+
+    args = parser.parse_args()
+
+    # Input validation
+    if not os.path.isfile(args.input):
+        raise FileNotFoundError(f"Input FASTA not found: {args.input}")
+
+    split_fasta(
+        input_fasta=args.input,
+        output_dir=args.outdir,
+        sample_name=args.sample,
+        fragment_size=args.size,
+    )
+
+
+if __name__ == "__main__":
+    main()
+
+##########################################################################################################################################################################################################################################################################
+#### 8. doushuang, plasmid的报告
+* 1. cursor辅助编写新版的分析报告;
+
+```bash
+results/final_test_PER_BASE_BREAKDOWN/
+├── UPA42701_UPA42701_per_base_details.csv ✅
+├── UPA42701_UPA42701_low_confidence_bases.csv ✅
+├── UPA42701_UPA42701_coverage.png ✅
+└── UPA42701_read_length_dist.png ✅ (新增)
+
+results/final_test_QC_REPORTS/
+└── UPA42701_report.pdf ✅ (包含read length distribution图)
+```
+初步测试通过,可以输出正确的分析报告模版;
+
+* 2. 升级脚本程序
+是否可以帮我再升级一下, 可以指定样品,项目号, 输入文件/目录, 此外, 帮我基于/Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/QB-template 目录中的fastq,fasta文件, 生成一个测试报告, 
+测试通过之后, 再参考QB-template 中的文件组织方式, 针对outout中的文件(多个质粒样品的数据结果), 生成分别独立的报告, 每个质粒样品一个独立的结果folder, 包含各种文件的子folder(ab1文件夹暂时空着)
+
+```bash
+#处理所有样品：
+cd scripts
+python3 generate_complete_reports.py -d ../output -o ../results --project-id final_reports
+INFO: ============================================================
+INFO: Organizing files by sample...
+INFO:   Data directory: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/output
+INFO:   Output directory: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/results
+INFO:   Project ID: final_reports
+INFO:   Found 14 samples
+INFO: Processing 14 samples...
+INFO: Processing sample: UPA42701
+INFO:   Processing contig: UPA42701 (6814 bp)
+INFO:     Computing coverage and per-base breakdown...
+INFO: Mapped 1/1 reads to UPA42701
+INFO:     ✓ Coverage computed: avg=1.0x, mapped=1/1 reads
+INFO:     Coverage plot already exists: UPA42701_UPA42701_coverage.png
+INFO:   Counting reads and bases from FASTQ: UPA42701_reads.fastq
+INFO:   ✓ Total: 1 reads, 6,814 bases
+INFO:   Calculating FASTA statistics...
+INFO:   ✓ Host Genomic DNA: 1 contigs, 6,814 bases
+INFO:   Generating PDF report...
+INFO:   ✓ PDF report saved: UPA42701_report.pdf
+INFO:   ✓ Successfully processed UPA42701
+...
+...
+...
+INFO: Processing sample: USX265344
+INFO:   Processing contig: USX265344 (7627 bp)
+INFO:     Computing coverage and per-base breakdown...
+INFO: Mapped 1/1 reads to USX265344
+INFO:     ✓ Coverage computed: avg=1.0x, mapped=1/1 reads
+INFO:     Creating coverage plot...
+INFO:     ✓ Coverage plot saved: USX265344_USX265344_coverage.png
+INFO:   Counting reads and bases from FASTQ: USX265344_reads.fastq
+INFO:   ✓ Total: 1 reads, 7,627 bases
+INFO:   Calculating FASTA statistics...
+INFO:   ✓ Host Genomic DNA: 1 contigs, 7,627 bases
+INFO:   Generating PDF report...
+INFO:   ✓ PDF report saved: USX265344_report.pdf
+INFO:   ✓ Successfully processed USX265344
+INFO: Generating summary CSV...
+INFO: Summary CSV written to: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/results/final_reports_summary.csv
+INFO: 
+✓ Successfully processed 14 samples
+INFO: Output structure: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/results/{sample_name}/{subdirectories}
+(base) liqinghui@LideMacBook-Pro scripts % 
+
+
+
+#处理指定样品：
+python3 generate_complete_reports.py -d ../output -o ../results --project-id final_reports --samples UPA42701 UPA42703
+
+#使用QB-template格式的输入：
+python3 generate_complete_reports.py \
+  --fasta-dir /path/to/FASTA_FILES \
+  --fastq-dir /path/to/RAW_FASTQ_FILES \
+  -o /path/to/output \
+  --project-id project_name
+```
+
+* 4. 测试新的完整输入,USX140904
+```bash
+(base) liqinghui@LideMacBook-Pro scripts % python3 generate_complete_reports.py -d ../../USX140904 -o ../USX140904 --project-id USX140904
+INFO: ============================================================
+INFO: Organizing files by sample...
+INFO:   Data directory: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/USX140904
+INFO:   Output directory: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/USX140904
+INFO:   Project ID: USX140904
+INFO:   Found 1 samples
+INFO: Processing 1 samples...
+INFO: Processing sample: USX140904
+WARNING: FASTQ file not found for USX140904
+WARNING: Missing FASTQ file for USX140904
+WARNING:   ⚠ No results generated for USX140904
+INFO: 
+✓ Successfully processed 0 samples
+INFO: Output structure: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/USX140904/{sample_name}/{subdirectories}
+(base) liqinghui@LideMacBook-Pro scripts % 
+(base) liqinghui@LideMacBook-Pro scripts % 
+(base) liqinghui@LideMacBook-Pro scripts % 
+(base) liqinghui@LideMacBook-Pro scripts % python3 generate_complete_reports.py -d ../../USX140904 -o ../USX140904 --project-id USX140904
+INFO: ============================================================
+INFO: Organizing files by sample...
+INFO:   Data directory: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/USX140904
+INFO:   Output directory: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/USX140904
+INFO:   Project ID: USX140904
+INFO:   No exact match found, searching for files containing 'USX140904' in filename...
+INFO:   Found FASTQ containing sample name: PBE94302_pass_USX140904_6ebb3c45_d6847234_0.fastq.gz
+INFO:   Found 1 FASTQ file(s) for USX140904: ['PBE94302_pass_USX140904_6ebb3c45_d6847234_0.fastq.gz']
+INFO:   Found 1 samples
+INFO: Processing 1 samples...
+INFO: Processing sample: USX140904
+INFO:   Processing contig: USX140904 (4906 bp)
+INFO:     Computing coverage and per-base breakdown...
+
+INFO: Mapped 91/1279 reads to USX140904
+INFO:     ✓ Coverage computed: avg=29.1x, mapped=91/1,279 reads
+INFO:     Creating coverage plot...
+INFO:     ✓ Coverage plot saved: USX140904_USX140904_coverage.png
+INFO:   Counting reads and bases from FASTQ: USX140904_reads.fastq.gz
+INFO:   ✓ Total: 1,279 reads, 3,387,923 bases
+INFO:   Calculating FASTA statistics...
+INFO:   ✓ Host Genomic DNA: 1 contigs, 4,906 bases
+INFO:   Generating PDF report...
+INFO:   ✓ PDF report saved: USX140904_report.pdf
+INFO:   ✓ Successfully processed USX140904
+INFO: Generating summary CSV...
+INFO: Summary CSV written to: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/USX140904/USX140904_summary.csv
+INFO: 
+✓ Successfully processed 1 samples
+INFO: Output structure: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/wf-clone-validation_3721d4d6-1e08-4db4-861c-f373b6934c07/USX140904/{sample_name}/{subdirectories}
+(base) liqinghui@LideMacBook-Pro scripts % 
+```
+![1c82cd7a78817d259a6a0c3fb4dffcd3.png](evernotecid://87E6BD0C-C63D-4350-BF05-363657F9594C/appyinxiangcom/2925421/ENResource/p12672)
+```bash
+1. 覆盖度图生成过程
+已创建文档：COVERAGE_PLOT_GENERATION.md，说明生成过程。简要流程如下：
+生成步骤：
+计算覆盖度 (compute_coverage 函数)
+读取 FASTA 中的参考序列（contig）
+从 FASTQ 读取测序 reads
+使用 simple_align() 将每个 read 比对到参考序列
+计算每个位置的覆盖深度（每个位置被多少 reads 覆盖）
+统计：平均覆盖度、最大覆盖度、比对成功的 reads 数量
+生成可视化图表 (create_coverage_plot 函数)
+使用 matplotlib 绘制折线图（蓝色线条 + 浅蓝色填充区域）
+标记低置信度区域（覆盖度 < 3x 的位置，用橙色 'x' 标记）
+添加统计信息框（平均和最大覆盖度）
+保存为 PNG 文件
+
+图表特征：
+X轴：基因组位置（bp）
+Y轴：覆盖深度（x）
+蓝色线条：覆盖度曲线
+橙色 'x'：低置信度区域标记
+统计框：显示平均和最大覆盖度
+2. Assembly Status 表格百分比显示
+已在 Assembly Status 表格的 Reads Mapped 和 Bases Mapped 列添加百分比：
+修改后的显示格式：
+Reads Mapped: 8,500 (85.00%)
+Bases Mapped: 4,250,000 (85.00%)
+百分比计算方式：
+Reads Mapped % = (比对成功的reads数 / FASTQ中的总reads数) × 100
+Bases Mapped % = (比对成功的bases数 / FASTQ中的总bases数) × 100
+
+```
+
+* 5. 完整的流程pipeline说明文档;
+```bash
+README_EN.md 完成情况
+文档已就绪，共 681 行，包含以下部分：
+主要章节
+Features - 核心功能与高级功能
+Installation - 安装说明（依赖、系统要求）
+Project Structure - 项目目录结构
+Usage - 基本用法与常见用例
+Output Structure - 输出目录结构说明
+Report Contents - PDF报告内容详解
+Command-Line Options - 所有命令行参数详解
+Examples - 6个使用示例
+Troubleshooting - 6个常见问题解决方案
+FAQs - 10个常见问题解答
+Technical Details - 技术细节（覆盖度计算、read长度分布等）
+Additional Resources - 相关资源链接
+Support - 支持信息
+Version History - 版本历史
+文档特点
+```
+
+
+
+##########################################################################################################################################################################################################################################################################
+
+#### 1. doushuang的nanopore测质粒的分析报告处理
+* 1. 样品序列长度分布;
+完成交付给doushuang
+
+* 2. 将epi2me的多个质粒合并的单个html报告, 分割成独立的单一sample质粒的html动态报告.
+完成;
+>脚本: /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/scripts/extract_sample_reports_epi2me.py
+
+
+* 2. 参考quintara bio的pdf报告, 出一个简版的核心报告
+
+
+
+##########################################################################################################################################################################################################################################################################
+
+#### 3. doushuang,数据分析和整理
+* 1. 整理需求和数据
+doushuang:
+/upload/Plasmid/output/fasta
+这里有17个fasta文件。
+质粒大小从3000-7000多都有。
+麻烦你帮我把他们变成17个ab1文件
+
+```bash
+(base) bioinfo@ampseq01:/data2/projects$ mkdir nanopore_20251031
+(base) bioinfo@ampseq01:/data2/projects$ cd nanopore_20251031
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ 
+sftp -P 30025 ct_ampseq@192.168.168.48 [uvSHkvxk]
+```
+
+
+* 2. 运行分析
+1️⃣ Plasmid fasta → 分割为 2kb 片段
+2️⃣ 2kb 片段 → HyraxAbif 生成 ab1 文件
+3️⃣ 对应 fastq.gz → 获取长度分布
+
+```bash
+#local
+scp  -P 3035  /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/scripts/get_length_dist_from_fastq.py qinghui@50.186.231.9:/mnt/data4/argo-argo-workspace-pvc-data4/liqh/
+scp  -P 3035  /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/scripts/split_plasmid_fasta.py qinghui@50.186.231.9:/mnt/data4/argo-argo-workspace-pvc-data4/liqh/
+
+#ampseq01:
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ sudo cp /data4/liqh/get_length_dist_from_fastq.py /opt/scripts/
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ chmod 777 /opt/scripts/
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ sudo cp /data4/liqh/split_plasmid_fasta.py  /opt/scripts/
+```
+
+```bash
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ ll /data2/projects/nanopore_20251031/Plasmid/output/fasta/*fasta|awk '{print $9}'
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U0586NNEG0-10-UPA42701.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U0586NNEG0-10-UPA42742.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U0586NNEG0-12-UPA42703.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U0586NNEG0-8-UPA42705.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U0586NNEG0-9-UPA42747.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U1031KAGG0-17-USX187559A.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U1031KAGG0-5-USX187552A.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U166P789G0-4-USX217573.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U2262YNJG0-50-USX214545.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U404ESJJG0-12-USX166936B.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U7227VYZG0-20-USX265318.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U7227VYZG0-32-USX265335.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U7227VYZG0-80-USX265344.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U784LPYHG0-21-USX227568A.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U8600HSUG0-6AK-USX140903.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U8600HSUG0-6AK-USX140904.fasta
+/data2/projects/nanopore_20251031/Plasmid/output/fasta/U8600HSUG0-6A-USX140562.fasta
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ 
+
+
+python /opt/scripts/split_plasmid_fasta.py plasmid.fasta demo_data
+/data1/opt/hyraxAbif/hyraxAbif-exe gen demo_data demo_data_ab1_results
+```
+
+🧩 整合脚本：run_plasmid_pipeline.sh
+```bash
+#!/bin/bash
+# ===========================================
+# Plasmid pipeline for Nanopore 20251031 project
+# Author: Qinghui
+# Date: 2025-10-31
+# ===========================================
+
+set -euo pipefail
+
+# ---- user settings ----
+FASTA_DIR="/data2/projects/nanopore_20251031/Plasmid/output/fasta"
+FASTQ_DIR="/data2/projects/nanopore_20251031/Plasmid/fast_pass"
+RESULTS_DIR="/data2/projects/nanopore_20251031/Plasmid/results"
+
+SPLIT_SCRIPT="/opt/scripts/split_plasmid_fasta.py"
+LEN_SCRIPT="/opt/scripts/get_length_dist_from_fastq.py"
+HYRAX_EXE="/data1/opt/hyraxAbif/hyraxAbif-exe"
+
+mkdir -p "${RESULTS_DIR}"
+
+echo "[INFO] Starting plasmid processing pipeline..."
+echo "[INFO] FASTA directory: ${FASTA_DIR}"
+echo "[INFO] FASTQ directory: ${FASTQ_DIR}"
+echo "[INFO] Results directory: ${RESULTS_DIR}"
+
+# loop all the fasta files
+for fasta_file in ${FASTA_DIR}/*.fasta; do
+    plasmid_name=$(basename "${fasta_file}" .fasta)
+    echo "-----------------------------------------------"
+    echo "[INFO] Processing plasmid: ${plasmid_name}"
+
+    # make result folder for current plasmid
+    OUTDIR="${RESULTS_DIR}/${plasmid_name}"
+    mkdir -p "${OUTDIR}"
+
+    # Step 1: split fasta into 2kb fragments
+    echo "[STEP 1] Splitting FASTA into 2kb fragments..."
+    SPLIT_OUT="${OUTDIR}/2kb_fragments"
+    mkdir -p "${SPLIT_OUT}"
+    python "${SPLIT_SCRIPT}" "${fasta_file}" "${SPLIT_OUT}"
+
+    # Step 2: generate ab1 results
+    echo "[STEP 2] Generating AB1 files with hyraxAbif..."
+    AB1_OUT="${OUTDIR}/2kb_fragments_ab1_results"
+    mkdir -p "${AB1_OUT}"
+    "${HYRAX_EXE}" gen "${SPLIT_OUT}" "${AB1_OUT}"
+
+    # Step 3: get fastq files and generate length distribution
+    echo "[STEP 3] Generating read length distribution..."
+    # fetch sample id from fasta names（such as USXxxxxxx or UPAxxxxxx）
+    sample_tag=$(echo "${plasmid_name}" | grep -oE '(USX[0-9A-Za-z]+|UPA[0-9A-Za-z]+)')
+    fastq_file=$(find "${FASTQ_DIR}" -type f -name "*${sample_tag}*.fastq.gz" | head -n 1 || true)
+
+    if [[ -n "${fastq_file}" && -f "${fastq_file}" ]]; then
+        echo "[INFO] Found matching fastq: ${fastq_file}"
+        python "${LEN_SCRIPT}" "${fastq_file}" --output-dir "${OUTDIR}"
+    else
+        echo "[WARN] No matching fastq found for ${plasmid_name}"
+    fi
+
+    echo "[DONE] Completed ${plasmid_name}"
+done
+
+echo "==============================================="
+echo "[ALL DONE] Results saved in ${RESULTS_DIR}"
+```
+执行完后，目录结构将如下：
+```text
+/data2/projects/nanopore_20251031/Plasmid/results/
+├── U0586NNEG0-10-UPA42701/
+│   ├── demo_data/                        # 2kb分割结果
+│   ├── demo_data_ab1_results/            # ab1模拟结果
+│   ├── PBE94302_pass_UPA42701_length_dist.txt (示例)
+│   └── length_distribution_plot.png
+├── U0586NNEG0-12-UPA42703/
+│   ├── demo_data/
+│   ├── demo_data_ab1_results/
+│   ├── ...
+└── ...
+```
+
+使用方法
+```bash
+cd /data2/projects/nanopore_20251031
+bash run_plasmid_pipeline.sh
+```
+
+
+遇到stack问题:
+```bash
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ STACK_YAML="stack.yaml" stack build hyraxAbif --no-run-tests --allow-different-user 
+
+(base) bioinfo@ampseq01:/opt/hyraxAbif$  stack exec hyraxAbif-exe dump --help
+Usage: stack exec COMMAND 
+                  [-- ARGUMENT(S) (e.g. stack exec ghc-pkg -- describe base)] 
+                  [--[no-]ghc-package-path] [--[no-]stack-exe] 
+                  [--package PACKAGE] [--rts-options RTSFLAG] [--cwd DIR] 
+                  [--setup-info-yaml URL] [--snapshot-location-base URL] 
+                  [--help]
+
+  Execute a command. If the command is absent, the first of any arguments is
+  taken as the command.
+
+Available options:
+  --[no-]ghc-package-path  Enable/disable setting the GHC_PACKAGE_PATH variable
+                           for the subprocess (default: enabled)
+  --[no-]stack-exe         Enable/disable setting the STACK_EXE environment
+                           variable to the path for the stack executable
+                           (default: enabled)
+  --package PACKAGE        Add a package (can be specified multiple times)
+  --rts-options RTSFLAG    Explicit RTS options to pass to application
+  --cwd DIR                Sets the working directory before executing
+  --setup-info-yaml URL    Alternate URL or relative / absolute path for Stack
+                           dependencies
+  --snapshot-location-base URL
+                           The base location of LTS/Nightly snapshots
+  --help                   Show this help text
+
+Command 'stack --help' for global options that apply to all subcommands.
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ 
+
+
+#(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ 
+/data1/opt/hyraxAbif/hyraxAbif-exe gen Plasmid/results/U0586NNEG0-10-UPA42701/2kb_fragments Plasmid/results/U0586NNEG0-10-UPA42701/2kb_fragments_ab1_results
+
+
+/data1/opt/hyraxAbif/hyraxAbif-exe --allow-different-user gen 2kb_fragments 2kb_fragments_ab1
+
+
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ export STACK_IN_CONTAINER=1
+export TMPDIR=/data2/tmp_hyrax
+unset STACK_YAML
+sudo /data1/opt/hyraxAbif/hyraxAbif-exe gen \
+  Plasmid/results/U0586NNEG0-10-UPA42701/2kb_fragments \
+  Plasmid/results/U0586NNEG0-10-UPA42701/2kb_fragments_ab1_results
+Writing implicit global project config file to: /tmp/global-project/stack.yaml
+Note: You can change the snapshot via the resolver field there.
+HttpExceptionRequest Request {
+  host                 = "s3.amazonaws.com"
+  port                 = 443
+  secure               = True
+  requestHeaders       = [("Accept","application/json"),("User-Agent","The Haskell Stack")]
+  path                 = "/haddock.stackage.org/snapshots.json"
+  queryString          = ""
+  method               = "GET"
+  proxy                = Nothing
+  rawBody              = False
+  redirectCount        = 10
+  responseTimeout      = ResponseTimeoutDefault
+  requestVersion       = HTTP/1.1
+  proxySecureMode      = ProxySecureWithConnect
+}
+ (StatusCodeException (Response {responseStatus = Status {statusCode = 403, statusMessage = "Forbidden"}, responseVersion = HTTP/1.1, responseHeaders = [("x-amz-request-id","J5HW8WZSVSRRNJAJ"),("x-amz-id-2","xpEQHBu8UXEGxAz4HqlmL5+LKRAOl2wt02VVy9SdzEH8ei6ccBifD7Egm93KVfuf2Y0RrkzlQH7Wouc/Lec7aPJBljLDWOW0"),("Content-Type","application/xml"),("Transfer-Encoding","chunked"),("Date","Fri, 31 Oct 2025 10:31:06 GMT"),("Server","AmazonS3")], responseBody = (), responseCookieJar = CJ {expose = []}, responseClose' = ResponseClose, responseOriginalRequest = Request {
+  host                 = "s3.amazonaws.com"
+  port                 = 443
+  secure               = True
+  requestHeaders       = [("Accept","application/json"),("User-Agent","The Haskell Stack")]
+  path                 = "/haddock.stackage.org/snapshots.json"
+  queryString          = ""
+  method               = "GET"
+  proxy                = Nothing
+  rawBody              = False
+  redirectCount        = 10
+  responseTimeout      = ResponseTimeoutDefault
+  requestVersion       = HTTP/1.1
+  proxySecureMode      = ProxySecureWithConnect
+}
+}) "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>J5HW8WZSVSRRNJAJ</RequestId><HostId>xpEQHBu8UXEGxAz4HqlmL5+LKRAOl2wt02VVy9SdzEH8ei6ccBifD7Egm93KVfuf2Y0RrkzlQH7Wouc/Lec7aPJBljLDWOW0</HostId></Error>")
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031$ 
+
+```
+
+重新编译:
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ STACK_YAML="stack.yaml" stack build hyraxAbif --no-run-tests --allow-different-user 
+Getting project config file from STACK_YAML environment
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ stack exec hyraxAbif-exe dump --help
+Usage: stack exec COMMAND 
+                  [-- ARGUMENT(S) (e.g. stack exec ghc-pkg -- describe base)] 
+                  [--[no-]ghc-package-path] [--[no-]stack-exe] 
+                  [--package PACKAGE] [--rts-options RTSFLAG] [--cwd DIR] 
+                  [--setup-info-yaml URL] [--snapshot-location-base URL] 
+                  [--help]
+
+  Execute a command. If the command is absent, the first of any arguments is
+  taken as the command.
+
+Available options:
+  --[no-]ghc-package-path  Enable/disable setting the GHC_PACKAGE_PATH variable
+                           for the subprocess (default: enabled)
+  --[no-]stack-exe         Enable/disable setting the STACK_EXE environment
+                           variable to the path for the stack executable
+                           (default: enabled)
+  --package PACKAGE        Add a package (can be specified multiple times)
+  --rts-options RTSFLAG    Explicit RTS options to pass to application
+  --cwd DIR                Sets the working directory before executing
+  --setup-info-yaml URL    Alternate URL or relative / absolute path for Stack
+                           dependencies
+  --snapshot-location-base URL
+                           The base location of LTS/Nightly snapshots
+  --help                   Show this help text
+
+Command 'stack --help' for global options that apply to all subcommands.
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ 
+
+#取消STACK_YAML设置:
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ unset STACK_YAML
+
+#成功运行(注意需要在软件安装目录下运行):
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ /data1/opt/hyraxAbif/hyraxAbif-exe gen demo_data demo_data_ab1_results
+
+升级长度分布脚本, 最终结果输出到results目录:
+(base) bioinfo@ampseq01:/data2/projects/nanopore_20251031/Plasmid$ ll
+total 28
+drwxr-xr-x  7 bioinfo bioinfo 4096 Oct 31 10:14 ./
+drwxrwxr-x  3 bioinfo bioinfo 4096 Oct 31 10:43 ../
+drwxr-xr-x 19 bioinfo bioinfo 4096 Oct 31 09:53 fast_pass/
+drwxr-xr-x  5 bioinfo bioinfo 4096 Oct 31 09:53 Lei-template/
+drwxr-xr-x  8 bioinfo bioinfo 4096 Oct 31 09:53 output/
+drwxr-xr-x  8 bioinfo bioinfo 4096 Oct 31 09:53 QB-template/
+drwxrwxr-x 19 bioinfo bioinfo 4096 Oct 31 10:44 results/
+'
+##########################################################################################################################################################################################################################################################################
+#### 1. doushuang的关于.ab文件输出图片
+模拟一代测序的信号图;
+```bash
+https://github.com/hyraxbio/hyraxAbif?tab=readme-ov-file
+cd /opt/
+git clone https://github.com/hyraxbio/hyraxAbif.git
+cd /opt/hyraxAbif
+#(base) bioinfo@ampseq01:/opt/hyraxAbif
+sudo apt-get install haskell-stack
+make build
+报错,在stack.yaml file中添加额外2行
+extra-deps:
+  - stm-2.5.3.1@sha256:421b57c9cdf55b4977e9445336be3895ba0c8d92b6ec6e474f140e173270d9dd,2443
+  - verset-0.0.1.11
+
+#再执行更新:
+stack update
+stack build
+
+#再编译:
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ make build
+STACK_YAML="stack.yaml" stack build hyraxAbif --no-run-tests
+Getting project config file from STACK_YAML environment
+
+#安装成功:
+stack exec hyraxAbif-exe dump --help
+
+Usage: stack exec COMMAND 
+                  [-- ARGUMENT(S) (e.g. stack exec ghc-pkg -- describe base)] 
+                  [--[no-]ghc-package-path] [--[no-]stack-exe] 
+                  [--package PACKAGE] [--rts-options RTSFLAG] [--cwd DIR] 
+                  [--setup-info-yaml URL] [--snapshot-location-base URL] 
+                  [--help]
+
+  Execute a command. If the command is absent, the first of any arguments is
+  taken as the command.
+
+Available options:
+  --[no-]ghc-package-path  Enable/disable setting the GHC_PACKAGE_PATH variable
+                           for the subprocess (default: enabled)
+  --[no-]stack-exe         Enable/disable setting the STACK_EXE environment
+                           variable to the path for the stack executable
+                           (default: enabled)
+  --package PACKAGE        Add a package (can be specified multiple times)
+  --rts-options RTSFLAG    Explicit RTS options to pass to application
+  --cwd DIR                Sets the working directory before executing
+  --setup-info-yaml URL    Alternate URL or relative / absolute path for Stack
+                           dependencies
+  --snapshot-location-base URL
+                           The base location of LTS/Nightly snapshots
+  --help                   Show this help text
+
+Command 'stack --help' for global options that apply to all subcommands.
+
+```bash
+(base) bioinfo@ampseq01:/opt/hyraxAbif/demo_data$ cat > demo1.fasta
+> 0.5
+ACG
+> 0.3
+AAAA
+> 1
+__AC
+^C
+(base) bioinfo@ampseq01:/opt/hyraxAbif/demo_data$ more demo1.fasta 
+> 0.5
+ACG
+> 0.3
+AAAA
+> 1
+__AC
+
+
+(base) bioinfo@ampseq01:/opt/hyraxAbif/demo_data$ ../hyraxAbif-exe gen demo1.fasta demo_results
+hyraxAbif-exe: demo1.fasta: getDirectoryContents:openDirStream: inappropriate type (Not a directory)
+(base) bioinfo@ampseq01:/opt/hyraxAbif/demo_data$ cd ..
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ ./hyraxAbif-exe gen demo_data demo_data
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ ll demo_data/
+total 20
+drwxrwxr-x  3 bioinfo bioinfo 4096 Oct 23 01:00 ./
+drwxrwxr-x 10 bioinfo bioinfo 4096 Oct 23 00:58 ../
+-rw-rw-r--  1 bioinfo bioinfo  916 Oct 23 01:00 demo1.ab1
+-rw-rw-r--  1 bioinfo bioinfo   30 Oct 23 00:58 demo1.fasta
+drwxrwxr-x  2 bioinfo bioinfo 4096 Oct 23 00:59 demo_results/
+(base) bioinfo@ampseq01:/opt/hyraxAbif$ 
+
+#生成了demo1.ab1文件;
+
+hyraxAbif-exe dump demo_data/demo1.ab1
+#会输出详细信息;
+```
+
+
+./hyraxAbif-exe gen demo_data demo_data
+再用ApE软件可视化:
+![5eb53ecb114da9183a3c3a654e30f1e3.png](evernotecid://87E6BD0C-C63D-4350-BF05-363657F9594C/appyinxiangcom/2925421/ENResource/p12656)
+
+##########################################################################################################################################################################################################################################################################
+
+
+好 — 我会立刻把 Pipeline 2.0（基于最新版 wf-clone-validation） 的全部必要文件一次性给出：
+	•	Dockerfile（v2.0，可构建镜像）
+	•	entrypoint.sh（容器入口，一键跑全流程）
+	•	generate_samplesheet.py（从 fast_pass/ 自动生成 samplesheet.csv）
+	•	split_plasmid_fasta_v2.py（升级版分片脚本，可指定 sample/project 等）
+	•	generate_complete_reports_v3.py（升级版报告生成器，支持 epi2me 输出与 fasta/fastq 模式）
+
+我也会在末尾给出构建与运行说明、常见问题处理提示（例如 hyraxAbif 编译/Stack 问题、Nextflow profiles 选择），以及示例命令，方便你直接把这些文件放到项目目录构建并运行。
+
+⸻
+
+提示：镜像里包含 nextflow, minimap2, samtools, python3（含 Biopython/pandas/matplotlib/reportlab）以及 hyraxAbif 的源码并尝试编译（需要联网）。如果你希望跳过编译而挂载已编译的 hyraxAbif-exe，我在说明中也会标出如何做。
+
+⸻
+
+1) Dockerfile (plasmid-pipeline:2.0)
+
+把下面保存为 Dockerfile（同目录放入 split_plasmid_fasta_v2.py、generate_samplesheet.py、generate_complete_reports_v3.py、entrypoint.sh，以便 COPY）：
+
+# Dockerfile for Plasmid Pipeline v2.0
+# Includes: nextflow, wf-clone-validation (downloaded at runtime), minimap2, samtools,
+# Python env (biopython/pandas/matplotlib/reportlab), and hyraxAbif (source, will be built if network available).
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+# -------------------------
+# system packages
+# -------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl wget git ca-certificates build-essential unzip bzip2 \
+    python3 python3-pip python3-venv python3-dev \
+    default-jdk-headless openjdk-17-jre-headless \
+    gcc g++ make pkg-config \
+    zlib1g-dev libbz2-dev liblzma-dev libcurl4-openssl-dev \
+    gnupg squashfs-tools apt-transport-https \
+    && rm -rf /var/lib/apt/lists/*
+
+# -------------------------
+# Install miniconda (mamba) for bio conda packages
+# -------------------------
+ENV CONDA_DIR=/opt/conda
+RUN wget -qO /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    bash /tmp/miniconda.sh -b -p ${CONDA_DIR} && \
+    rm /tmp/miniconda.sh
+ENV PATH=${CONDA_DIR}/bin:${PATH}
+
+# create a small conda env and install bio tools with mamba
+RUN conda install -y -c conda-forge mamba && \
+    mamba install -y -c bioconda minimap2 samtools flye bwa seqtk && \
+    mamba install -y -c conda-forge openjdk && \
+    mamba clean -y --all
+
+# -------------------------
+# Install Nextflow
+# -------------------------
+RUN curl -s https://get.nextflow.io | bash && mv nextflow /usr/local/bin/ && chmod +x /usr/local/bin/nextflow
+
+# -------------------------
+# Python deps
+# -------------------------
+RUN python3 -m pip install --no-cache-dir biopython pandas numpy matplotlib reportlab seaborn
+
+# -------------------------
+# Haskell stack for hyraxAbif build (optional)
+# -------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends haskell-stack ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# -------------------------
+# Create directories and copy scripts
+# -------------------------
+WORKDIR /opt/pipeline
+COPY split_plasmid_fasta_v2.py /opt/pipeline/split_plasmid_fasta_v2.py
+COPY generate_samplesheet.py /opt/pipeline/generate_samplesheet.py
+COPY generate_complete_reports_v3.py /opt/pipeline/generate_complete_reports_v3.py
+COPY entrypoint.sh /opt/pipeline/entrypoint.sh
+RUN chmod +x /opt/pipeline/entrypoint.sh /opt/pipeline/split_plasmid_fasta_v2.py /opt/pipeline/generate_samplesheet.py /opt/pipeline/generate_complete_reports_v3.py
+
+# -------------------------
+# hyraxAbif: clone source (build during image build if network available)
+# -------------------------
+WORKDIR /opt
+RUN git clone https://github.com/hyraxbio/hyraxAbif.git || true
+WORKDIR /opt/hyraxAbif
+
+# Create safe TMP for stack build to avoid permission check problems
+ENV TMPDIR=/opt/.stack-tmp
+RUN mkdir -p ${TMPDIR} && chmod 777 ${TMPDIR}
+
+# If network available, attempt to build hyraxAbif; failure won't abort final image build
+RUN if [ -d /opt/hyraxAbif ]; then \
+      echo "Attempting stack update/build for hyraxAbif (may require network)"; \
+      STACK_YAML=stack.yaml stack update || echo "stack update failed"; \
+      STACK_YAML=stack.yaml stack build hyraxAbif --no-run-tests || echo "stack build failed"; \
+      make -C /opt/hyraxAbif build || echo "make build failed"; \
+    fi || true
+
+# -------------------------
+# final
+# -------------------------
+WORKDIR /data
+ENV PATH=/opt/conda/bin:/usr/local/bin:${PATH}
+
+# entrypoint
+ENTRYPOINT ["/opt/pipeline/entrypoint.sh"]
+CMD ["--help"]
+
+说明与注意事项：
+	•	镜像尝试 clone & build hyraxAbif，但构建依赖外网（Hackage/S3）。若环境不允许联网，镜像构建会跳过编译（镜像仍能使用其它功能），你可以把已经编译好的 hyraxAbif-exe 挂载到容器 /opt/hyraxAbif/hyraxAbif-exe 来替代构建。
+	•	nextflow 运行 wf-clone-validation 时你可选择 -profile docker（需要宿主 Docker 权限）或 -profile singularity/-profile conda。我在 entrypoint 中给出常用调用方式。
+
+⸻
+
+2) entrypoint.sh
+
+保存为 entrypoint.sh（已在 Dockerfile COPY）。本脚本是容器入口，自动识别参数并执行全流程：生成 samplesheet → 运行 EPI2ME workflow → 分片 → hyraxAbif → 生成报告。
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ENTRYPOINT for plasmid-pipeline image
+# Usage examples:
+# docker run --rm -v /data:/data plasmid-pipeline:2.0 --fast-pass /data/fast_pass --output /data/results --project-id project1
+# or
+# docker run --rm -v /data:/data plasmid-pipeline:2.0 --epi2me-output /data/epi2me_out --output /data/results --project-id project1
+
+print_help(){
+  cat <<'EOF'
+Plasmid-pipeline entrypoint
+Options:
+  --fast-pass <dir>       : path to nanopore fast_pass folder (each subfolder = sample)
+  --epi2me-output <dir>   : path to wf-clone-validation output (skip assembly)
+  --samplesheet <file>    : existing samplesheet.csv for wf-clone-validation
+  --output <dir>          : results output directory (required)
+  --project-id <id>       : project id string (optional)
+  --nextflow-profile <p>  : nextflow profile (docker|conda|singularity), default: docker
+  --hyrax-path <path>     : path to hyraxAbif-exe inside container (default: /opt/hyraxAbif/hyraxAbif-exe)
+  --help
+EOF
+}
+
+# default params
+FAST_PASS=""
+EPI2ME_OUT=""
+SAMPLESHEET=""
+OUTPUT_DIR=""
+PROJECT_ID=""
+NEXTFLOW_PROFILE="docker"
+HYRAX_PATH="/opt/hyraxAbif/hyraxAbif-exe"
+
+# parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --fast-pass) FAST_PASS="$2"; shift 2;;
+    --epi2me-output) EPI2ME_OUT="$2"; shift 2;;
+    --samplesheet) SAMPLESHEET="$2"; shift 2;;
+    --output) OUTPUT_DIR="$2"; shift 2;;
+    --project-id) PROJECT_ID="$2"; shift 2;;
+    --nextflow-profile) NEXTFLOW_PROFILE="$2"; shift 2;;
+    --hyrax-path) HYRAX_PATH="$2"; shift 2;;
+    --help) print_help; exit 0;;
+    *) echo "Unknown arg: $1"; print_help; exit 1;;
+  esac
+done
+
+if [[ -z "${OUTPUT_DIR}" ]]; then
+  echo "[ERROR] --output <dir> is required"
+  exit 1
+fi
+
+mkdir -p "${OUTPUT_DIR}"
+
+# Step A: if fast_pass provided, generate samplesheet
+if [[ -n "${FAST_PASS}" && -z "${SAMPLESHEET}" && -z "${EPI2ME_OUT}" ]]; then
+  echo "[INFO] Generating samplesheet from fast_pass: ${FAST_PASS}"
+  python3 /opt/pipeline/generate_samplesheet.py --fast-pass "${FAST_PASS}" --out "${OUTPUT_DIR}/samplesheet.csv"
+  SAMPLESHEET="${OUTPUT_DIR}/samplesheet.csv"
+fi
+
+# Step B: Run wf-clone-validation (if no epi2me output provided)
+if [[ -n "${SAMPLESHEET}" && -z "${EPI2ME_OUT}" ]]; then
+  echo "[INFO] Running wf-clone-validation with samplesheet ${SAMPLESHEET}"
+  # ensure wf-clone-validation is fetched by nextflow; use -profile
+  nextflow run epi2me-labs/wf-clone-validation \
+    --fastq "${SAMPLESHEET}" \
+    --out_dir "${OUTPUT_DIR}/epi2me_output" \
+    -profile "${NEXTFLOW_PROFILE}" \
+    -resume
+  EPI2ME_OUT="${OUTPUT_DIR}/epi2me_output"
+fi
+
+if [[ -z "${EPI2ME_OUT}" ]]; then
+  echo "[ERROR] No epi2me output found or created."
+  exit 1
+fi
+
+echo "[INFO] Using epi2me output at: ${EPI2ME_OUT}"
+
+# Step C: For each sample found in epi2me output, do fragment -> ab1 -> reports
+for sample_dir in "${EPI2ME_OUT}"/*; do
+  if [[ ! -d "${sample_dir}" ]]; then
+    continue
+  fi
+  sample_name=$(basename "${sample_dir}")
+  echo "---------------------------------------------"
+  echo "[INFO] Processing sample: ${sample_name}"
+  sample_out="${OUTPUT_DIR}/${sample_name}"
+  mkdir -p "${sample_out}"
+  # Find assembled fasta (common names: assembly.fasta, assembly.fna, polished.fasta)
+  fasta_candidate=$(ls "${sample_dir}"/*assembly*.f*a* 2>/dev/null || true)
+  if [[ -z "${fasta_candidate}" ]]; then
+    fasta_candidate=$(ls "${sample_dir}"/*.fasta 2>/dev/null || true)
+  fi
+  if [[ -z "${fasta_candidate}" ]]; then
+    echo "[WARN] No assembly fasta found for ${sample_name} under ${sample_dir}"
+    continue
+  fi
+  # take the first
+  fasta_file=$(echo "${fasta_candidate}" | awk '{print $1}')
+  cp -v "${fasta_file}" "${sample_out}/final.fasta"
+
+  # fragment
+  frag_dir="${sample_out}/fragments"
+  mkdir -p "${frag_dir}"
+  python3 /opt/pipeline/split_plasmid_fasta_v2.py --input "${sample_out}/final.fasta" --outdir "${frag_dir}" --sample "${sample_name}" --size 2000
+
+  # generate ab1 if hyrax exists
+  ab1_out="${sample_out}/ab1"
+  mkdir -p "${ab1_out}"
+  if [[ -x "${HYRAX_PATH}" ]]; then
+    echo "[INFO] Generating AB1 files with hyraxAbif at ${HYRAX_PATH}"
+    "${HYRAX_PATH}" gen "${frag_dir}" "${ab1_out}" || echo "[WARN] hyraxAbif run failed for ${sample_name}"
+  else
+    echo "[WARN] hyraxAbif not found at ${HYRAX_PATH}; skipping ab1 generation for ${sample_name}"
+  fi
+
+  # find fastq(s) for read length and coverage (from epi2me output mapping or original)
+  # attempt to find reads under sample_dir/reads or sample_dir/fastq
+  fastq_found=$(find "${sample_dir}" -type f -name "*.fastq*" | head -n1 || true)
+  if [[ -z "${fastq_found}" ]]; then
+    # fallback: look under parent fast_pass dir if provided
+    echo "[INFO] No fastq inside epi2me output for ${sample_name}"
+    fastq_found=""
+  fi
+
+  # run report generator
+  python3 /opt/pipeline/generate_complete_reports_v3.py \
+    --fasta "${sample_out}/final.fasta" \
+    ${fastq_found:+--fastq "${fastq_found}"} \
+    --outdir "${sample_out}/qc" \
+    --project-id "${PROJECT_ID:-default}" \
+    --sample "${sample_name}" \
+    --minimap2-bin "$(command -v minimap2 || true)" \
+    --samtools-bin "$(command -v samtools || true)"
+
+  echo "[INFO] Finished sample: ${sample_name}"
+done
+
+echo "[ALL DONE] Results in ${OUTPUT_DIR}"
+
+
+⸻
+
+3) generate_samplesheet.py
+
+#!/usr/bin/env python3
+"""
+generate_samplesheet.py
+Scan a fast_pass directory and produce a samplesheet.csv usable by
+epi2me-labs/wf-clone-validation.
+
+Output CSV format:
+sample_id,fastq
+sample1,/path/to/fastq1.fastq.gz
+"""
+import argparse
+import csv
+import glob
+import os
+from pathlib import Path
+
+def discover_fast_pass(fp_dir):
+    samples = {}
+    for entry in os.scandir(fp_dir):
+        if entry.is_dir():
+            sample = entry.name
+            # search for fastq.gz in the subdir
+            fq_files = list(Path(entry.path).rglob("*.fastq*"))
+            if fq_files:
+                # join with colon separated or glob pattern; wf-clone-validation accepts glob
+                samples[sample] = str(os.path.join(entry.path, "*.fastq*"))
+    return samples
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fast-pass", required=True, help="Path to fast_pass folder (each subdir a sample)")
+    parser.add_argument("--out", required=True, help="Path to output samplesheet.csv")
+    args = parser.parse_args()
+
+    samples = discover_fast_pass(args.fast_pass)
+    if not samples:
+        print("No samples found in", args.fast_pass)
+        return
+
+    with open(args.out, "w", newline="") as csvf:
+        writer = csv.writer(csvf)
+        writer.writerow(["sample_id", "fastq"])
+        for s, pattern in sorted(samples.items()):
+            writer.writerow([s, pattern])
+    print(f"[OK] Wrote {args.out} with {len(samples)} samples.")
+
+if __name__ == "__main__":
+    main()
+
+
+⸻
+
+4) split_plasmid_fasta_v2.py
+
+#!/usr/bin/env python3
+"""
+split_plasmid_fasta_v2.py
+
+Split input fasta sequences into fragments of specified size.
+Usage:
+  python split_plasmid_fasta_v2.py --input sample.fasta --outdir ./frags --sample SAMPLE --size 2000
+"""
+import argparse
+from Bio import SeqIO
+import os
+
+def split_seq(record, outdir, sample, size):
+    seq = str(record.seq)
+    L = len(seq)
+    i = 0
+    idx = 1
+    while i < L:
+        part = seq[i:i+size]
+        fname = os.path.join(outdir, f"{sample}_{idx}.fasta")
+        header = f">{sample}_part{idx} length={len(part)}"
+        with open(fname, "w") as fh:
+            fh.write(header + "\n")
+            fh.write(part + "\n")
+        print(f"[OK] Wrote {fname} ({len(part)} bp)")
+        idx += 1
+        i += size
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True, help="Input fasta file (may contain multiple contigs)")
+    parser.add_argument("--outdir", required=True, help="Output directory for fragments")
+    parser.add_argument("--sample", required=True, help="Sample name prefix for output files")
+    parser.add_argument("--size", type=int, default=2000, help="Fragment size in bp (default 2000)")
+    args = parser.parse_args()
+
+    os.makedirs(args.outdir, exist_ok=True)
+    records = list(SeqIO.parse(args.input, "fasta"))
+    if not records:
+        print("No records found in", args.input)
+        return
+    for rec in records:
+        # if multiple contigs, append contig id
+        sample_prefix = args.sample
+        if len(records) > 1:
+            sample_prefix = f"{args.sample}_{rec.id}"
+        split_seq(rec, args.outdir, sample_prefix, args.size)
+
+if __name__ == "__main__":
+    main()
+
+
+⸻
+
+5) generate_complete_reports_v3.py
+
+这是关键脚本，包含 coverage 计算（优先使用 minimap2 + samtools，若缺失使用内置简单映射回退）、read length distribution、per-base breakdown、以及生成 PDF 报告。请把它保存为 generate_complete_reports_v3.py。
+
+#!/usr/bin/env python3
+"""
+generate_complete_reports_v3.py
+
+Inputs:
+  --fasta <assembly.fasta>   (required)
+  --fastq <reads.fastq.gz>   (optional, but recommended)
+  --outdir <dir>             (required)
+  --sample <sample_name>     (optional)
+  --project-id <id>          (optional)
+  --minimap2-bin <path>      (path to minimap2, fallback to 'minimap2' in PATH)
+  --samtools-bin <path>      (path to samtools)
+"""
+import argparse
+import os
+import subprocess
+from pathlib import Path
+from Bio import SeqIO
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import gzip
+import sys
+
+def run_minimap2_samtools(minimap2_bin, samtools_bin, fasta, fastq, out_bam):
+    # map reads -> sort -> index -> produce coverage via samtools depth
+    p1 = subprocess.run([minimap2_bin, "-ax", "map-ont", fasta, fastq], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p1.returncode != 0:
+        print("[WARN] minimap2 failed:", p1.stderr.decode()[:500])
+        return False
+    # write sam to temp, convert to bam
+    sam = out_bam + ".unsorted.sam"
+    with open(sam, "wb") as f:
+        f.write(p1.stdout)
+    p2 = subprocess.run([samtools_bin, "view", "-bS", sam, "-o", out_bam + ".unsorted.bam"])
+    if p2.returncode != 0:
+        print("[WARN] samtools view failed")
+        return False
+    p3 = subprocess.run([samtools_bin, "sort", "-o", out_bam, out_bam + ".unsorted.bam"])
+    if p3.returncode != 0:
+        print("[WARN] samtools sort failed")
+        return False
+    subprocess.run([samtools_bin, "index", out_bam])
+    # remove intermediate
+    for fn in [sam, out_bam + ".unsorted.bam"]:
+        try:
+            os.remove(fn)
+        except:
+            pass
+    return True
+
+def coverage_from_bam(samtools_bin, bam, contig):
+    # returns coverage array for contig
+    depth_cmd = [samtools_bin, "depth", "-a", "-r", contig, bam]
+    p = subprocess.run(depth_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p.returncode != 0:
+        print("[WARN] samtools depth failed:", p.stderr.decode()[:200])
+        return None
+    lines = p.stdout.decode().splitlines()
+    cov = []
+    for line in lines:
+        parts = line.split()
+        # chrom pos depth
+        pos = int(parts[1])
+        d = int(parts[2])
+        cov.append(d)
+    return np.array(cov, dtype=int)
+
+def simple_align_coverage(fasta_seq, reads_fastq, contig):
+    # fallback naive: for each read, find first exact substring match (inefficient)
+    # build coverage array and increment
+    L = len(fasta_seq)
+    cov = np.zeros(L, dtype=int)
+    # read fastq
+    open_fn = gzip.open if str(reads_fastq).endswith(".gz") else open
+    total_reads = 0
+    with open_fn(reads_fastq, "rt") as fh:
+        for i, line in enumerate(fh):
+            if i % 4 == 1:
+                read = line.strip()
+                total_reads += 1
+                idx = fasta_seq.find(read[:50])  # try seed 50bp
+                if idx != -1:
+                    idx0 = idx
+                    end = min(idx + len(read), L)
+                    cov[idx0:end] += 1
+    return cov
+
+def compute_read_length_stats(fastq, out_prefix):
+    # compute read lengths and save table + plot
+    open_fn = gzip.open if str(fastq).endswith(".gz") else open
+    lengths = []
+    with open_fn(fastq, "rt") as fh:
+        for i, line in enumerate(fh):
+            if i % 4 == 1:
+                lengths.append(len(line.strip()))
+    if not lengths:
+        return None
+    arr = np.array(lengths)
+    stats = {
+        "total_reads": int(len(arr)),
+        "total_bases": int(arr.sum()),
+        "min": int(arr.min()), "max": int(arr.max()),
+        "mean": float(arr.mean()), "median": float(np.median(arr)),
+        "std": float(arr.std())
+    }
+    # write distribution
+    counts = pd.Series(arr).value_counts().sort_index()
+    dist_file = out_prefix + "_read_length_dist.txt"
+    counts.to_csv(dist_file, sep="\t", header=["count"])
+    # plot
+    plt.figure(figsize=(8,4))
+    plt.hist(arr, bins=100)
+    plt.xlabel("Read Length")
+    plt.ylabel("Count")
+    plt.title("Read Length Distribution")
+    png_file = out_prefix + "_read_length_dist.png"
+    plt.tight_layout()
+    plt.savefig(png_file, dpi=150)
+    plt.close()
+    return stats, png_file, dist_file
+
+def coverage_plot(cov_array, out_png, contig_name):
+    plt.figure(figsize=(10,3))
+    x = np.arange(1, len(cov_array)+1)
+    plt.plot(x, cov_array, linewidth=1)
+    plt.fill_between(x, cov_array, alpha=0.2)
+    avg = np.mean(cov_array) if len(cov_array)>0 else 0
+    plt.title(f"Coverage: {contig_name} (avg={avg:.1f}x)")
+    plt.xlabel("Position (bp)")
+    plt.ylabel("Depth (x)")
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=150)
+    plt.close()
+
+def write_per_base_csv(cov_array, out_csv, contig_name):
+    df = pd.DataFrame({"position": np.arange(1, len(cov_array)+1), "depth": cov_array})
+    df.to_csv(out_csv, index=False)
+
+def create_pdf_report(pdf_path, sample, project_id, contig_name, contig_len, coverage_png, rl_png):
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+    w, h = A4
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(40, h-40, f"Project: {project_id}    Sample: {sample}")
+    c.setFont("Helvetica", 12)
+    c.drawString(40, h-70, f"Contig: {contig_name}    Length: {contig_len} bp")
+    # coverage image
+    if os.path.exists(coverage_png):
+        c.drawImage(coverage_png, 40, h-350, width=520, height=250, preserveAspectRatio=True)
+    # read length image
+    if os.path.exists(rl_png):
+        c.drawImage(rl_png, 40, h-650, width=520, height=200, preserveAspectRatio=True)
+    c.showPage()
+    c.save()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fasta", required=True)
+    parser.add_argument("--fastq", required=False)
+    parser.add_argument("--outdir", required=True)
+    parser.add_argument("--sample", default="sample")
+    parser.add_argument("--project-id", default="project")
+    parser.add_argument("--minimap2-bin", default="minimap2")
+    parser.add_argument("--samtools-bin", default="samtools")
+    args = parser.parse_args()
+
+    os.makedirs(args.outdir, exist_ok=True)
+    contigs = list(SeqIO.parse(args.fasta, "fasta"))
+    if not contigs:
+        print("[ERROR] No contigs found in fasta")
+        sys.exit(1)
+    for rec in contigs:
+        contig_name = rec.id
+        seq = str(rec.seq)
+        contig_len = len(seq)
+        print(f"[INFO] Processing contig {contig_name} ({contig_len} bp)")
+
+        # coverage
+        cov_array = None
+        bam_path = os.path.join(args.outdir, f"{args.sample}_{contig_name}.bam")
+        if args.fastq:
+            # try minimap2 + samtools
+            try:
+                ok = run_minimap2_samtools(args.minimap2_bin, args.samtools_bin, args.fasta, args.fastq, bam_path)
+                if ok:
+                    cov_array = coverage_from_bam(args.samtools_bin, bam_path, contig_name)
+            except Exception as e:
+                print("[WARN] mapping pipeline failed:", e)
+        if cov_array is None and args.fastq:
+            print("[INFO] Falling back to naive alignment for coverage (may be slow/approximate)")
+            cov_array = simple_align_coverage(seq, args.fastq, contig_name)
+
+        if cov_array is None:
+            cov_array = np.zeros(contig_len, dtype=int)
+
+        # save per-base CSV
+        per_base_csv = os.path.join(args.outdir, f"{args.sample}_{contig_name}_per_base.csv")
+        write_per_base_csv(cov_array, per_base_csv, contig_name)
+        # low confidence bases
+        low_conf_csv = os.path.join(args.outdir, f"{args.sample}_{contig_name}_low_confidence_bases.csv")
+        df = pd.read_csv(per_base_csv)
+        low_df = df[df['depth'] < 3]
+        low_df.to_csv(low_conf_csv, index=False)
+
+        # coverage plot
+        cov_png = os.path.join(args.outdir, f"{args.sample}_{contig_name}_coverage.png")
+        coverage_plot(cov_array, cov_png, contig_name)
+
+        # read length stats + plot
+        rl_png = ""
+        rl_stats = {}
+        if args.fastq:
+            try:
+                stats, rl_png, dist_file = compute_read_length_stats(args.fastq, os.path.join(args.outdir, f"{args.sample}_{contig_name}"))
+                rl_stats = stats
+            except Exception as e:
+                print("[WARN] read length stats failed:", e)
+
+        # summary CSV
+        summary = {
+            "sample": args.sample,
+            "contig": contig_name,
+            "contig_len": contig_len,
+            "avg_coverage": float(np.mean(cov_array)),
+            "mapped_reads": int((cov_array>0).sum()),
+        }
+        summary_df = pd.DataFrame([summary])
+        summary_csv = os.path.join(args.outdir, f"{args.sample}_{contig_name}_summary.csv")
+        summary_df.to_csv(summary_csv, index=False)
+
+        # generate pdf report
+        pdf_path = os.path.join(args.outdir, f"{args.sample}_{contig_name}_report.pdf")
+        create_pdf_report(pdf_path, args.sample, args.project_id, contig_name, contig_len, cov_png, rl_png)
+        print(f"[OK] PDF saved: {pdf_path}")
+
+if __name__ == "__main__":
+    main()
+
+说明：
+	•	脚本优先使用 minimap2+samtools 进行映射计算 coverage（更可靠）。如果容器或宿主没安装，会回退到简单的 substring-based 近似映射（simple_align_coverage），对长读/高覆盖样本表现不如 minimap2，但能保证脚本能运行。
+	•	脚本会生成 per-base CSV、low_confidence CSV、coverage PNG、read length distribution PNG、以及单 contig 的 PDF 报告。
+
+⸻
+
+构建镜像（本地）
+
+在包含上述文件的目录执行：
+
+docker build -t plasmid-pipeline:2.0 .
+
+注意：镜像构建会尝试 git clone 并用 stack 构建 hyraxAbif。如果你的构建环境无法访问外网（或 S3），该步骤会有失败警告，但镜像仍会构建成功（只是没有编译好的 hyraxAbif-exe）。你可以稍后把已在其他环境编译好的 hyraxAbif-exe 拷贝到宿主并在 docker run -v /host/path/to/hyraxAbif-exe:/opt/hyraxAbif/hyraxAbif-exe 方式挂载进容器，entrypoint 会发现并使用它。
+
+⸻
+
+运行示例
+	1.	假设宿主文件结构：
+
+/Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/fast_pass/...
+/Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1/QB-template/...
+
+	2.	运行 assembly + pipeline（使用 docker profile for nextflow；host 需允许 docker-in-docker 或把 nextflow 配置为 conda/singularity）：
+
+docker run --rm -it \
+  -v /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1:/data \
+  plasmid-pipeline:2.0 \
+  --fast-pass /data/fast_pass \
+  --output /data/results \
+  --project-id 20251031 \
+  --nextflow-profile docker
+
+如果你的宿主不允许容器内创建新的 docker containers（常见），请改为 --nextflow-profile conda（镜像中已装 conda/mamba），并确保 nextflow can use conda in container: you may need to run nextflow on host rather than inside container. 如果无法运行 nextflow inside container with docker profile，常见做法是：在宿主运行 nextflow（宿主安装 nextflow），而容器只做后续步骤；entrypoint 脚本也能接受 pre-generated epi2me output via --epi2me-output.
+	3.	如果你已经在宿主先跑好 wf-clone-validation 并把输出放到 /data/epi2me_output，可以直接运行 container 只做后续处理：
+
+docker run --rm -it \
+  -v /Volumes/Transcend/AmpSeq/19.nanopore-plasmid/20251031-new-ab1:/data \
+  plasmid-pipeline:2.0 \
+  --epi2me-output /data/epi2me_output \
+  --output /data/results \
+  --project-id 20251031
+
+
+⸻
+
+常见问题 & 解决建议
+	1.	hyraxAbif 未编译或缺少 hyraxAbif-exe
+	•	方案 A：在有联网的机器上完整构建镜像（能访问 Hackage/S3），镜像内会有编译好的 hyraxAbif-exe。
+	•	方案 B（推荐）：在机器上本地编译 hyraxAbif（你之前已成功），把 hyraxAbif-exe 放在宿主某处，然后在 docker run 时挂载到容器内 /opt/hyraxAbif/hyraxAbif-exe。entrypoint 会使用它。
+	2.	Nextflow profile docker 在容器内运行失败
+	•	常见原因：容器内无法启动 sibling containers。建议在宿主运行 nextflow（host nextflow）或使用 -profile conda/singularity。我提供了 --samplesheet 生成器，方便在宿主运行 nextflow run epi2me-labs/wf-clone-validation --fastq /path/samplesheet.csv --out_dir /path/epi2me_out -profile conda，然后把 epi2me_out 挂载到容器来完成后续步骤。
+	3.	minimap2 / samtools not found
+	•	镜像使用 conda 安装了 minimap2/samtools，若你运行时在 host 环境改动，请确保 container 中能找到它们（which minimap2）。generate script 可接受自定义 --minimap2-bin/--samtools-bin 路径。
+
+⸻
+
+我接下来可以继续为你做的（可选）
+	•	把 generate_complete_reports_v3.py 的 PDF 风格美化（加入表格列、Assembly Status 部分、percentages 等）
+	•	把 hyraxAbif 的构建步骤改为 multi-stage build：先在 builder stage 完整编译，再把 hyraxAbif-exe copy 到最终镜像（减少最终镜像体积）
+	•	把 pipeline 变成可在 Kubernetes / Slurm 提交的任务（支持批量样本并行）
+	•	提供一个小型 Streamlit Web 前端，用于上传 fasta/fastq 并在线查看生成的 AB1 + 报告（你之前提过感兴趣）
+
+⸻
+
+如果现在你同意，我可以立即为你：
+	•	（A）把这些文件打包为单个 tarball 文本（供直接 scp 上传到服务器构建），或者
+	•	（B）如果你希望我先本地模拟一套运行命令（基于你之前提供的 QB-template 路径），我可以给出精确的 docker run 的真实示例（带路径映射），并一步步说明如何调试常见错误。
+
+你要哪个？（回复 “A” 打包文件 或 “B” 给出针对你路径的运行示例）
+
