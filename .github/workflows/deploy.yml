@@ -17,64 +17,47 @@ jobs:
     - name: Setup SSH
       run: |
         mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
         chmod 600 ~/.ssh/deploy_key
-        ssh-keyscan -p 2223 -H localhost >> ~/.ssh/known_hosts 2>/dev/null || true
+        
+        # Add jump host (8.133.18.117) to known_hosts
+        ssh-keyscan -H 8.133.18.117 >> ~/.ssh/known_hosts 2>/dev/null || true
+        
+        # Add target host (localhost:2223) to known_hosts
+        # Note: We need to scan through the jump host, but ssh-keyscan doesn't support ProxyJump
+        # So we'll disable strict host key checking for this connection
+        echo "Host 8.133.18.117" >> ~/.ssh/config
+        echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+        echo "  UserKnownHostsFile ~/.ssh/known_hosts" >> ~/.ssh/config
+        echo "" >> ~/.ssh/config
+        echo "Host target-server" >> ~/.ssh/config
+        echo "  HostName localhost" >> ~/.ssh/config
+        echo "  Port 2223" >> ~/.ssh/config
+        echo "  User qinghuili" >> ~/.ssh/config
+        echo "  ProxyJump root@8.133.18.117" >> ~/.ssh/config
+        echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+        echo "  UserKnownHostsFile ~/.ssh/known_hosts" >> ~/.ssh/config
+        echo "  IdentityFile ~/.ssh/deploy_key" >> ~/.ssh/config
+        chmod 600 ~/.ssh/config
         
     - name: Deploy to remote server
       env:
-        SSH_JUMP_HOST: root@8.133.18.117
-        SSH_TARGET: qinghuili@localhost
-        SSH_PORT: 2223
         DEPLOY_PATH: /Users/qinghuili/AmpSeq/repository/16.nanopore_plasmid_assembly
       run: |
-        # Create deployment script
-        cat > /tmp/deploy.sh << 'DEPLOY_SCRIPT'
-        #!/bin/bash
-        set -e
+        echo "Testing SSH connection..."
+        ssh -F ~/.ssh/config target-server "echo 'SSH connection successful!'" || {
+          echo "SSH connection test failed, but continuing..."
+        }
         
-        DEPLOY_PATH="$1"
+        echo "Creating deployment directory on remote server..."
+        ssh -F ~/.ssh/config target-server "mkdir -p $DEPLOY_PATH" || {
+          echo "Failed to create directory, but continuing..."
+        }
         
-        echo "Creating deployment directory: $DEPLOY_PATH"
-        mkdir -p "$DEPLOY_PATH"
-        
-        echo "Syncing files to remote server..."
-        rsync -avz --delete \
-          --exclude '.git' \
-          --exclude '__pycache__' \
-          --exclude '*.pyc' \
-          --exclude '*.log' \
-          --exclude 'output/' \
-          --exclude 'results/' \
-          --exclude '.nextflow/' \
-          --exclude 'work/' \
-          --exclude '*.fasta' \
-          --exclude '*.fastq' \
-          --exclude '*.ab1' \
-          --exclude '*.pdf' \
-          --exclude '*.csv' \
-          --exclude '*.tsv' \
-          --exclude '*.yaml' \
-          --exclude 'config.yaml' \
-          --exclude '.DS_Store' \
-          --exclude '*.tmp' \
-          --exclude '*.temp' \
-          ./ "$DEPLOY_PATH/"
-        
-        echo "Setting permissions..."
-        chmod +x "$DEPLOY_PATH/run_pipeline.sh" 2>/dev/null || true
-        find "$DEPLOY_PATH/scripts" -type f -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
-        
-        echo "Deployment completed successfully!"
-        echo "Deployed to: $DEPLOY_PATH"
-        DEPLOY_SCRIPT
-        
-        chmod +x /tmp/deploy.sh
-        
-        # Transfer files and execute deployment
         echo "Transferring files to remote server..."
         rsync -avz --delete \
-          -e "ssh -i ~/.ssh/deploy_key -o ProxyJump=$SSH_JUMP_HOST -p $SSH_PORT" \
+          -e "ssh -F ~/.ssh/config" \
           --exclude '.git' \
           --exclude '__pycache__' \
           --exclude '*.pyc' \
@@ -94,13 +77,11 @@ jobs:
           --exclude '.DS_Store' \
           --exclude '*.tmp' \
           --exclude '*.temp' \
-          ./ "$SSH_TARGET:$DEPLOY_PATH/"
+          --exclude 'nanopore_plasmid_pipeline_v1.0.zip' \
+          ./ target-server:$DEPLOY_PATH/
         
         echo "Setting permissions on remote server..."
-        ssh -i ~/.ssh/deploy_key \
-          -o ProxyJump="$SSH_JUMP_HOST" \
-          -p "$SSH_PORT" \
-          "$SSH_TARGET" \
+        ssh -F ~/.ssh/config target-server \
           "chmod +x $DEPLOY_PATH/run_pipeline.sh 2>/dev/null || true; \
            find $DEPLOY_PATH/scripts -type f -name '*.sh' -exec chmod +x {} \; 2>/dev/null || true; \
            echo 'Deployment completed successfully!'"
