@@ -2,6 +2,38 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-09 - Added Automatic Nextflow Lock File Cleanup
+
+### Problem:
+- Nextflow workflow failed with error: "Unable to acquire lock on session"
+- This occurs when a previous execution was interrupted, leaving lock files in `.nextflow/cache/` directory
+
+### Solution:
+- Added automatic lock file detection and cleanup before running Nextflow
+- Checks for stale lock files in `.nextflow/cache/` directory
+- Verifies no running Nextflow processes before cleaning locks
+- Prevents interference with active Nextflow runs
+
+### Files Modified:
+- `run_pipeline.sh`: Added lock file cleanup logic before Nextflow execution (lines ~387-410)
+
+### Key Changes:
+- Check for lock files: `find $LOCK_DIR -name "LOCK" -type f`
+- Verify no running processes: `pgrep -f "nextflow.*wf-clone-validation"`
+- Auto-clean stale locks if no processes are running
+- Warn and exit if processes are running (safety check)
+
+### Manual Fix (if needed):
+If automatic cleanup doesn't work, manually clean lock files:
+```bash
+find /path/to/output/01.assembly/.nextflow/cache -name "LOCK" -type f -delete
+```
+
+### Impact:
+- Prevents "Unable to acquire lock" errors from interrupted runs
+- Automatic recovery from failed/interrupted executions
+- Safe: Won't interfere with running Nextflow processes
+
 ## 2025-12-03 - Reverted to Local Docker Build and Created Delivery Package
 
 ### Updates:
