@@ -386,6 +386,34 @@ if [[ "$SKIP_ASSEMBLY" != "true" ]]; then
     mkdir -p "$OUTPUT_DIR/01.assembly/.nextflow"
     chmod 755 "$OUTPUT_DIR/01.assembly/.nextflow"
     
+    # Clean up Nextflow lock files from previous interrupted runs
+    # Lock files can prevent new runs if previous execution was interrupted
+    log "Checking for stale Nextflow lock files..."
+    LOCK_DIR="$OUTPUT_DIR/01.assembly/.nextflow/cache"
+    if [[ -d "$LOCK_DIR" ]]; then
+        # Check if there are any lock files
+        LOCK_FILES=$(find "$LOCK_DIR" -name "LOCK" -type f 2>/dev/null || true)
+        if [[ -n "$LOCK_FILES" ]]; then
+            # Check if there are any running Nextflow processes
+            RUNNING_PROCESSES=$(pgrep -f "nextflow.*wf-clone-validation" || true)
+            if [[ -z "$RUNNING_PROCESSES" ]]; then
+                log "Found stale lock files but no running Nextflow processes. Cleaning up locks..."
+                find "$LOCK_DIR" -name "LOCK" -type f -delete 2>/dev/null || true
+                log "✓ Lock files cleaned"
+            else
+                log "WARNING: Found running Nextflow process(es): $RUNNING_PROCESSES"
+                log "WARNING: Not cleaning lock files to avoid interfering with running process"
+                log "WARNING: If this is an error, manually kill the process and delete lock files:"
+                log "WARNING:   find $LOCK_DIR -name 'LOCK' -type f -delete"
+                exit 1
+            fi
+        else
+            log "✓ No lock files found"
+        fi
+    else
+        log "✓ No cache directory found (first run)"
+    fi
+    
     # Set Nextflow temporary directory to avoid /tmp space issues
     # Use a temporary directory within the output directory
     NXF_TEMP_DIR="$OUTPUT_DIR/01.assembly/.nextflow/tmp"
