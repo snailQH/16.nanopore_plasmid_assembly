@@ -157,19 +157,20 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
             '-work-dir', str(nextflow_work_dir),  # Explicitly set work directory
             '-resume'  # Allow resume if interrupted
         ]
-    
-    # Add primers if specified in config (optional)
-    if 'primers' in config.get('assembly', {}) and config['assembly'].get('primers'):
-        cmd.extend(['--primers', str(config['assembly']['primers'])])
-    
-    logger.info("Running epi2me wf-clone-validation workflow...")
-    logger.info(f"  Samplesheet: {samplesheet_file}")
-    logger.info(f"  Output directory: {output_path}")
-    logger.info(f"  Profile: {profile}")
-    logger.info(f"  Nextflow version: {env.get('NXF_VER', 'default')}")
-    logger.info(f"  Note: Running inside Docker - ensure Docker socket is mounted for -profile standard")
-    logger.debug(f"Command: {' '.join(cmd)}")
-    
+        
+        # Add primers if specified in config (optional)
+        if 'primers' in config.get('assembly', {}) and config['assembly'].get('primers'):
+            cmd.extend(['--primers', str(config['assembly']['primers'])])
+        
+        logger.info("Running epi2me wf-clone-validation workflow...")
+        logger.info(f"  Samplesheet: {samplesheet_file}")
+        logger.info(f"  Output directory: {output_path}")
+        logger.info(f"  Profile: {profile}")
+        logger.info(f"  Nextflow version: {env.get('NXF_VER', 'default')}")
+        logger.info(f"  Work directory: {nextflow_work_dir}")
+        logger.info(f"  Note: Running inside Docker - ensure Docker socket is mounted for -profile standard")
+        logger.debug(f"Command: {' '.join(cmd)}")
+        
         # Run Nextflow workflow with NXF_VER environment variable
         # Always capture output to get error details
         result = subprocess.run(
