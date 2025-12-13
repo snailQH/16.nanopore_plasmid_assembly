@@ -103,6 +103,17 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     is_docker = os.path.exists('/.dockerenv')
     profile = 'standard'  # Always use 'standard' profile as per user's successful test
     
+    # For Docker-in-Docker: Try to get host path from mounted volume
+    # The output directory is mounted from host, so we need to find the host path
+    # This is tricky because we're inside a container - we'll try to use the same path
+    # and rely on Docker volume mounts to make it work
+    host_output_dir = None
+    if is_docker:
+        # In Docker-in-Docker, the output directory should be mounted from host
+        # We'll use the container path and let Nextflow's Docker executor handle it
+        # The key is that the same volume must be mounted in sub-containers
+        host_output_dir = str(output_path.resolve())
+    
     # Use short form workflow reference (works same as full URL)
     workflow_ref = 'epi2me-labs/wf-clone-validation'
     workflow_version = 'v1.8.3'  # Latest stable version
@@ -131,30 +142,51 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     matplotlib_dir.mkdir(parents=True, exist_ok=True)
     env['MPLCONFIGDIR'] = str(matplotlib_dir)
     
+    # Convert paths to absolute - needed for config generation
+    output_path_abs = output_path.resolve()
+    fast_pass_path_abs = fast_pass_path.resolve()
+    
     # Create Nextflow config override to set environment variables for Docker containers
     # This ensures processes running in Docker containers have writable directories
     # and proper path handling
     # CRITICAL: For Docker-in-Docker scenarios, ensure workDir is properly mounted
     nextflow_config_override = output_path / 'nextflow.config.override'
     nextflow_work_dir_abs_str = str(nextflow_work_dir_abs)
+    output_path_abs_str = str(output_path_abs)
+    
+    # For Docker-in-Docker: Mount the entire output directory to sub-containers
+    # This ensures sub-containers can access work files
+    # The output directory is already mounted from host, so we mount the same path
+    output_path_abs_str = str(output_path.resolve())
     
     with open(nextflow_config_override, 'w') as f:
-        f.write(f"""process {{
-    withName: '.*' {{
+        config_content = """process {
+    withName: '.*' {
         beforeScript = '''
             export MPLCONFIGDIR=/tmp/matplotlib_config_$$
             mkdir -p $MPLCONFIGDIR
         '''
-    }}
-}}
+    }
+}
 
-docker {{
+docker {
     enabled = true
     fixOwnership = true
-}}
-""")
+"""
+        # Mount the entire output directory so sub-containers can access work files
+        # This is critical for Docker-in-Docker scenarios
+        if is_docker:
+            # Escape the path for the config file
+            output_path_escaped = output_path_abs_str.replace("'", "\\'")
+            config_content += f"    runOptions = '-v {output_path_escaped}:{output_path_escaped}'\n"
+        
+        config_content += "}\n"
+        f.write(config_content)
+    
     logger.info(f"Created Nextflow config override: {nextflow_config_override}")
     logger.info(f"  Work directory for Docker executor: {nextflow_work_dir_abs_str}")
+    if is_docker:
+        logger.info(f"  Mounting output directory for sub-containers: {output_path_abs_str}")
     
     # Pull workflow first
     logger.info(f"Pulling epi2me workflow {workflow_version}...")
