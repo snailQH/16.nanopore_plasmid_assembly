@@ -2,6 +2,34 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Fix Nextflow Config Override - Remove Invalid Executor Setting
+
+### Problem:
+- Nextflow workflow failed with error: `ERROR ~ Unknown executor name: docker`
+- The config override incorrectly set `executor = 'docker'`
+- `docker` is a container engine, not an executor
+- Executor should be `local` (default), and Docker is handled by `-profile standard`
+
+### Solution:
+- Removed `executor = 'docker'` from Nextflow config override
+- Kept Docker container engine configuration (`docker.enabled = true`)
+- `-profile standard` already configures processes to run in Docker containers
+- Executor remains default `local`, which is correct for running inside Docker
+
+### Files Modified:
+- `scripts/step1_run_epi2me_workflow.py`:
+  - Removed invalid `executor = 'docker'` line from config override
+  - Kept Docker container engine settings and beforeScript for matplotlib
+
+### Key Changes:
+- Executor: Uses default `local` executor (correct for Docker-in-Docker)
+- Container engine: Docker enabled via `docker.enabled = true`
+- Profile: `-profile standard` handles container configuration
+
+### Impact:
+- Fixes "Unknown executor name: docker" error
+- Nextflow should now properly execute with Docker containers
+
 ## 2025-12-13 - Add Nextflow Config Override for Docker Executor
 
 ### Problem:

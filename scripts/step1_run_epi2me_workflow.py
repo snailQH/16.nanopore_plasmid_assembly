@@ -140,8 +140,6 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     
     with open(nextflow_config_override, 'w') as f:
         f.write(f"""process {{
-    executor = 'docker'
-    
     withName: '.*' {{
         beforeScript = '''
             export MPLCONFIGDIR=/tmp/matplotlib_config_$$
