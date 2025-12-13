@@ -285,6 +285,7 @@ def main():
     )
     parser.add_argument('--fast-pass', required=True, help='Path to fast_pass directory')
     parser.add_argument('--out', required=True, help='Output samplesheet CSV file')
+    parser.add_argument('--work-dir', help='Working directory for creating barcode directories (if fast_pass is read-only)')
     parser.add_argument('--approx-size', type=int, help='Approximate plasmid size (bp) to include in samplesheet')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose logging')
     
@@ -294,6 +295,7 @@ def main():
         samplesheet_file = generate_samplesheet(
             fast_pass_dir=args.fast_pass,
             output_file=args.out,
+            work_dir=args.work_dir,
             approx_size=args.approx_size,
             verbose=args.verbose
         )
