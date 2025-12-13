@@ -99,47 +99,57 @@ jobs:
           exit 1
         }
         
-        echo "Checking if deployment directory exists..."
-        DEPLOY_DIR_EXISTS=$(ssh -F "$SSH_CONFIG" target-server "test -d $DEPLOY_PATH && echo 'yes' || echo 'no'")
+        echo "Ensuring deployment directory exists..."
+        # Create parent directory if it doesn't exist, but don't remove existing directory
+        ssh -F "$SSH_CONFIG" target-server "mkdir -p $(dirname $DEPLOY_PATH)" || {
+          echo "Error: Failed to create parent directory"
+          exit 1
+        }
         
-        if [ "$DEPLOY_DIR_EXISTS" = "yes" ]; then
-          echo "Directory exists. Checking if it's a git repository..."
-          IS_GIT_REPO=$(ssh -F "$SSH_CONFIG" target-server "cd $DEPLOY_PATH && git rev-parse --is-inside-work-tree 2>/dev/null && echo 'yes' || echo 'no'")
-          
-          if [ "$IS_GIT_REPO" = "yes" ]; then
-            echo "Git repository found. Pulling latest changes..."
+        echo "Checking if deployment directory exists and is a git repository..."
+        IS_GIT_REPO=$(ssh -F "$SSH_CONFIG" target-server "test -d $DEPLOY_PATH && cd $DEPLOY_PATH && git rev-parse --is-inside-work-tree 2>/dev/null && echo 'yes' || echo 'no'")
+        
+        if [ "$IS_GIT_REPO" = "yes" ]; then
+          echo "Git repository found. Pulling latest changes..."
+          ssh -F "$SSH_CONFIG" target-server \
+            "cd $DEPLOY_PATH && \
+             git fetch origin && \
+             git checkout $GIT_BRANCH 2>/dev/null || git checkout -b $GIT_BRANCH origin/$GIT_BRANCH && \
+             git pull origin $GIT_BRANCH" || {
+            echo "Error: git pull failed, trying reset..."
             ssh -F "$SSH_CONFIG" target-server \
               "cd $DEPLOY_PATH && \
                git fetch origin && \
-               git reset --hard origin/$GIT_BRANCH && \
-               git clean -fd" || {
-              echo "Error: git pull failed"
+               git reset --hard origin/$GIT_BRANCH" || {
+              echo "Error: git reset failed"
               exit 1
             }
-            echo "✓ Successfully pulled latest changes"
-          else
-            echo "Directory exists but is not a git repository. Removing and cloning..."
-            ssh -F "$SSH_CONFIG" target-server "rm -rf $DEPLOY_PATH" || {
-              echo "Warning: Failed to remove existing directory, but continuing..."
-            }
-            echo "Cloning repository..."
+          }
+          echo "✓ Successfully pulled latest changes"
+        else
+          DEPLOY_DIR_EXISTS=$(ssh -F "$SSH_CONFIG" target-server "test -d $DEPLOY_PATH && echo 'yes' || echo 'no'")
+          if [ "$DEPLOY_DIR_EXISTS" = "yes" ]; then
+            echo "Directory exists but is not a git repository. Initializing git..."
             ssh -F "$SSH_CONFIG" target-server \
-              "mkdir -p $(dirname $DEPLOY_PATH) && \
+              "cd $DEPLOY_PATH && \
+               git init && \
+               git remote add origin $GIT_REPO_URL 2>/dev/null || git remote set-url origin $GIT_REPO_URL && \
+               git fetch origin && \
+               git checkout -b $GIT_BRANCH origin/$GIT_BRANCH 2>/dev/null || git reset --hard origin/$GIT_BRANCH" || {
+              echo "Error: Failed to initialize git repository in existing directory"
+              exit 1
+            }
+            echo "✓ Successfully initialized git repository"
+          else
+            echo "Directory does not exist. Cloning repository..."
+            ssh -F "$SSH_CONFIG" target-server \
+              "mkdir -p $DEPLOY_PATH && \
                git clone -b $GIT_BRANCH $GIT_REPO_URL $DEPLOY_PATH" || {
               echo "Error: git clone failed"
               exit 1
             }
             echo "✓ Successfully cloned repository"
           fi
-        else
-          echo "Directory does not exist. Creating parent directory and cloning repository..."
-          ssh -F "$SSH_CONFIG" target-server \
-            "mkdir -p $(dirname $DEPLOY_PATH) && \
-             git clone -b $GIT_BRANCH $GIT_REPO_URL $DEPLOY_PATH" || {
-            echo "Error: git clone failed"
-            exit 1
-          }
-          echo "✓ Successfully cloned repository"
         fi
         
         echo "Setting permissions on remote server..."

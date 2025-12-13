@@ -114,9 +114,7 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
         host_output_dir = host_output_dir.rstrip('/')
     if is_docker and host_output_dir:
         logger.info(f"Detected HOST_OUTPUT_DIR environment variable: {host_output_dir}")
-    elif is_docker:
-        logger.warning("Running in Docker but HOST_OUTPUT_DIR not set. Sub-containers may not access work files correctly.")
-        logger.warning("Set HOST_OUTPUT_DIR to the host path of the output directory when running docker run")
+    # Note: HOST_OUTPUT_DIR check is done later in the code to provide better error message
     
     # Use short form workflow reference (works same as full URL)
     workflow_ref = 'epi2me-labs/wf-clone-validation'
@@ -166,43 +164,66 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     # Build Docker runOptions based on Docker-in-Docker scenario
     docker_run_options = ""
     if is_docker:
-        # Use HOST path if available
-        if host_output_dir:
-            # Use host path for mounting to sub-containers
-            # IMPORTANT: Keep host_output_dir as string - don't resolve in container
-            # The host path should be the base output directory on the host
-            host_path_str = host_output_dir.rstrip('/')
-            container_path_str = '/data/output'
-            
-            # Also mount fastq directory if different from output
-            # Get host input directory path
-            host_input_dir = os.environ.get('HOST_INPUT_DIR', '')
-            mount_options = []
-            
-            # Mount: host_path:container_path (base output directory)
-            # This allows sub-containers to access all subdirectories including work
-            host_path_escaped = host_path_str.replace("'", "\\'").replace(' ', '\\ ')
-            container_path_escaped = container_path_str.replace("'", "\\'").replace(' ', '\\ ')
-            mount_options.append(f'-v {host_path_escaped}:{container_path_escaped}')
-            
-            # Also mount input directory if available
-            if host_input_dir:
-                host_input_str = host_input_dir.rstrip('/')
-                host_input_escaped = host_input_str.replace("'", "\\'").replace(' ', '\\ ')
-                # Mount to same path in container for consistency
-                mount_options.append(f'-v {host_input_escaped}:/data/input:ro')
-            
-            # Combine all mount options
-            docker_run_options = " ".join(mount_options)
-            logger.info(f"  Using HOST base path for Docker executor: {host_path_str} -> {container_path_escaped}")
-            if host_input_dir:
-                logger.info(f"  Also mounting input directory: {host_input_str} -> /data/input:ro")
-            logger.info(f"  This allows sub-containers to access work directory at {output_path_abs_str}")
-        else:
-            # Fallback: try container path (may not work in all cases)
-            base_path_escaped = '/data/output'.replace("'", "\\'").replace(' ', '\\ ')
-            docker_run_options = f"-v {base_path_escaped}:{base_path_escaped}"
-            logger.warning(f"  Using container base path (HOST_OUTPUT_DIR not set): {base_path_escaped}")
+        # CRITICAL: When running in Docker, we MUST have HOST_OUTPUT_DIR set
+        # because sub-containers need to mount the HOST path, not the container path
+        # Container path mounts like -v /data/output:/data/output are invalid for Docker-in-Docker
+        if not host_output_dir:
+            error_msg = """
+================================================================================
+ERROR: HOST_OUTPUT_DIR environment variable is required when running in Docker
+
+When running the pipeline inside Docker with Docker-in-Docker (Nextflow processes),
+sub-containers need access to the work directory on the HOST, not inside the container.
+
+Solution: Pass HOST_OUTPUT_DIR environment variable when running docker run:
+
+  docker run --rm -it \\
+    -v /var/run/docker.sock:/var/run/docker.sock \\
+    -v "${INPUT_DIR}:/data/input:ro" \\
+    -v "${OUTPUT_DIR}:/data/output" \\
+    -e "HOST_OUTPUT_DIR=${OUTPUT_DIR}" \\
+    -e "HOST_INPUT_DIR=${INPUT_DIR}" \\
+    nanopore-plasmid-pipeline:latest \\
+    --input /data/input --output /data/output ...
+
+Alternatively, use the provided wrapper script:
+  ./docker_run_full_pipeline.sh --input <input> --output <output> ...
+
+================================================================================
+"""
+            logger.error(error_msg)
+            raise RuntimeError("HOST_OUTPUT_DIR environment variable is required when running in Docker")
+        
+        # Use host path for mounting to sub-containers
+        # IMPORTANT: Keep host_output_dir as string - don't resolve in container
+        # The host path should be the base output directory on the host
+        host_path_str = host_output_dir.rstrip('/')
+        container_path_str = '/data/output'
+        
+        # Also mount fastq directory if different from output
+        # Get host input directory path
+        host_input_dir = os.environ.get('HOST_INPUT_DIR', '')
+        mount_options = []
+        
+        # Mount: host_path:container_path (base output directory)
+        # This allows sub-containers to access all subdirectories including work
+        host_path_escaped = host_path_str.replace("'", "\\'").replace(' ', '\\ ')
+        container_path_escaped = container_path_str.replace("'", "\\'").replace(' ', '\\ ')
+        mount_options.append(f'-v {host_path_escaped}:{container_path_escaped}')
+        
+        # Also mount input directory if available
+        if host_input_dir:
+            host_input_str = host_input_dir.rstrip('/')
+            host_input_escaped = host_input_str.replace("'", "\\'").replace(' ', '\\ ')
+            # Mount to same path in container for consistency
+            mount_options.append(f'-v {host_input_escaped}:/data/input:ro')
+        
+        # Combine all mount options
+        docker_run_options = " ".join(mount_options)
+        logger.info(f"  Using HOST base path for Docker executor: {host_path_str} -> {container_path_escaped}")
+        if host_input_dir:
+            logger.info(f"  Also mounting input directory: {host_input_str} -> /data/input:ro")
+        logger.info(f"  This allows sub-containers to access work directory at {output_path_abs_str}")
     
     # Write Nextflow config override
     # CRITICAL: For Docker-in-Docker, we need to ensure work directory is accessible

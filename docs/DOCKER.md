@@ -32,20 +32,34 @@ The Dockerfile will:
 
 ### Basic Usage
 
-**Important**: The pipeline uses `epi2me wf-clone-validation` which requires Docker to run processes (medaka, flye, etc.). When running the pipeline inside Docker, you must mount the Docker socket:
+**Important**: The pipeline uses `epi2me wf-clone-validation` which requires Docker to run processes (medaka, flye, etc.). When running the pipeline inside Docker, you must:
+
+1. Mount the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock`
+2. **Set HOST_OUTPUT_DIR and HOST_INPUT_DIR environment variables** so sub-containers can access the work directory:
 
 ```bash
-docker run --rm \
-  -v /path/to/fast_pass:/data/input/fast_pass:ro \
-  -v /path/to/output:/data/output \
+INPUT_DIR="/path/to/fast_pass"
+OUTPUT_DIR="/path/to/output"
+
+docker run --rm -it \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "${INPUT_DIR}:/data/input:ro" \
+  -v "${OUTPUT_DIR}:/data/output" \
+  -e "HOST_OUTPUT_DIR=${OUTPUT_DIR}" \
+  -e "HOST_INPUT_DIR=${INPUT_DIR}" \
   nanopore-plasmid-pipeline:latest \
   --input /data/input \
   --output /data/output \
-  --project-id PROJECT_ID
+  --project-id PROJECT_ID \
+  --approx-size 5000 \
+  --coverage 50
 ```
 
+**Why HOST_OUTPUT_DIR is required**: When Nextflow runs processes in sub-containers (Docker-in-Docker), the sub-containers need to mount the work directory from the HOST, not from inside the main container. The `HOST_OUTPUT_DIR` environment variable tells the pipeline the host path so it can correctly configure Nextflow's Docker executor.
+
 **Note**: The `-v /var/run/docker.sock:/var/run/docker.sock` mount is required for Nextflow to use Docker containers for workflow processes when using `-profile standard`.
+
+**Recommended**: Use the provided wrapper script `docker_run_full_pipeline.sh` which automatically sets these environment variables correctly.
 
 ### Using Docker Compose
 

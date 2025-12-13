@@ -2,6 +2,110 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Improve Deployment Scripts - Preserve Existing Directories and Add Test Sync
+
+### Problem:
+- GitHub Actions deployment script deleted existing directories before cloning
+- Need better sync script for test server (bioinfo@ampseq01)
+- Should preserve existing directories and use git pull instead of deleting
+
+### Solution:
+- **Modified GitHub Actions workflow** to preserve existing directories
+  - Uses `mkdir -p` to create parent directory (doesn't delete existing)
+  - Checks if directory is git repo, if yes: `git pull`, if no: initialize git
+  - Only clones if directory doesn't exist
+- **Updated sync_to_remote.sh** for test server
+  - Changed to use direct SSH to bioinfo@ampseq01 (no jump host needed)
+  - Uses rsync to sync files excluding git, archives, and build artifacts
+  - Better error handling and connection testing
+
+### Files Modified:
+- `.github/workflows/deploy.yml`:
+  - Changed deployment logic to preserve existing directories
+  - Uses `git pull` instead of deleting and cloning
+  - Handles case where directory exists but is not a git repo (initializes git)
+- `sync_to_remote.sh`:
+  - Updated for test server (bioinfo@ampseq01)
+  - Removed jump host configuration (direct SSH)
+  - Improved file exclusions and error messages
+
+### Key Changes:
+- **Preserve directories**: No more deleting existing deployment directories
+- **Git pull**: Uses `git pull` for existing repos instead of reset
+- **Test sync**: Direct sync script for test server using rsync
+
+### Impact:
+- Safer deployments that don't lose existing files
+- Easier testing with direct sync to test server
+- Better workflow for development and testing
+
+### Usage:
+For test server sync:
+```bash
+./sync_to_remote.sh
+```
+
+For GitHub Actions deployment:
+- Automatically triggered on push to main branch
+- Preserves existing directory structure
+- Uses git pull for updates
+
+## 2025-12-13 - Fix Docker-in-Docker Configuration - Require HOST_OUTPUT_DIR
+
+### Problem:
+- Nextflow workflow failed with `/bin/bash: .command.run: No such file or directory`
+- Error occurs when running pipeline inside Docker without setting `HOST_OUTPUT_DIR`
+- The fallback code tried to mount container paths (`-v /data/output:/data/output`) which is invalid for Docker-in-Docker
+- Sub-containers couldn't access the work directory because it wasn't mounted from the host
+
+### Solution:
+- **Made HOST_OUTPUT_DIR mandatory** when running inside Docker
+- Added clear error message that guides users on how to fix the issue
+- Removed invalid fallback that tried to mount container paths
+- Updated documentation to emphasize the requirement
+
+### Files Modified:
+- `scripts/step1_run_epi2me_workflow.py`:
+  - Added mandatory check for `HOST_OUTPUT_DIR` when running in Docker
+  - Removed invalid fallback mount option
+  - Added comprehensive error message with example command
+  - Removed redundant warning (now fails fast with clear error)
+- `docs/DOCKER.md`:
+  - Updated Basic Usage section to show `HOST_OUTPUT_DIR` and `HOST_INPUT_DIR` requirements
+  - Added explanation of why these environment variables are needed
+  - Recommended using wrapper script `docker_run_full_pipeline.sh`
+
+### Key Changes:
+- **Early failure**: Pipeline now fails immediately with clear error if `HOST_OUTPUT_DIR` is not set
+- **Clear guidance**: Error message includes exact command to fix the issue
+- **Documentation**: Updated docs to emphasize the requirement
+
+### Impact:
+- Fixes Docker-in-Docker configuration issues
+- Users get clear error message instead of cryptic Nextflow failures
+- Prevents invalid Docker mount configurations
+
+### Usage:
+When running docker manually, you MUST set `HOST_OUTPUT_DIR`:
+```bash
+INPUT_DIR="/path/to/input"
+OUTPUT_DIR="/path/to/output"
+
+docker run --rm -it \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "${INPUT_DIR}:/data/input:ro" \
+  -v "${OUTPUT_DIR}:/data/output" \
+  -e "HOST_OUTPUT_DIR=${OUTPUT_DIR}" \
+  -e "HOST_INPUT_DIR=${INPUT_DIR}" \
+  nanopore-plasmid-pipeline:latest \
+  --input /data/input --output /data/output ...
+```
+
+Or use the wrapper script:
+```bash
+./docker_run_full_pipeline.sh --input <input> --output <output> ...
+```
+
 ## 2025-12-13 - Fix Docker-in-Docker Path Mapping - Add HOST_INPUT_DIR and Improve Config Generation
 
 ### Problem:

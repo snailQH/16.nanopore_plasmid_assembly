@@ -43,17 +43,29 @@ nohup ./run_pipeline.sh \
 
 ### Alternative: Using Docker Directly
 
+**Important**: When running inside Docker, you must set `HOST_OUTPUT_DIR` and `HOST_INPUT_DIR` environment variables for Docker-in-Docker to work correctly.
+
 ```bash
+# Set input and output directories
+INPUT_DIR="/path/to/fast_pass"
+OUTPUT_DIR="/path/to/output"
+
 # Run pipeline directly with Docker
-docker run --rm \
-  -v /path/to/fast_pass:/data/input/fast_pass:ro \
-  -v /path/to/output:/data/output \
+docker run --rm -it \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "${INPUT_DIR}:/data/input:ro" \
+  -v "${OUTPUT_DIR}:/data/output" \
+  -e "HOST_OUTPUT_DIR=${OUTPUT_DIR}" \
+  -e "HOST_INPUT_DIR=${INPUT_DIR}" \
   nanopore-plasmid-pipeline:latest \
-  python3 /opt/pipeline/scripts/run_pipeline.py \
-  --input /data/input/fast_pass \
+  --input /data/input \
   --output /data/output \
   --project-id PROJECT_ID \
-  --skip-assembly  # Note: Assembly runs on HOST via run_pipeline.sh
+  --approx-size 5000 \
+  --coverage 50
+
+# Or use the wrapper script (recommended):
+./docker_run_full_pipeline.sh --input "${INPUT_DIR}" --output "${OUTPUT_DIR}" ...
 ```
 
 ### Local Execution
