@@ -138,18 +138,24 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     
     # Change to output directory before running Nextflow
     # This ensures Nextflow creates work directory in the correct location
+    # Convert paths to absolute before changing directory
+    output_path_abs = output_path.resolve()
+    fast_pass_path_abs = fast_pass_path.resolve()
+    samplesheet_file_abs = Path(samplesheet_file).resolve()
+    
     original_cwd = os.getcwd()
     try:
-        os.chdir(str(output_path))
+        os.chdir(str(output_path_abs))
         
         # Build command matching user's successful test command
+        # Use absolute paths to avoid issues after changing directory
         cmd = [
             'nextflow', 'run',
             workflow_ref,
             '-r', workflow_version,  # Use v1.8.3 (latest stable)
-            '--fastq', str(fast_pass_path),  # Parent directory containing sample subdirectories
-            '--sample_sheet', str(samplesheet_file),  # CSV mapping barcodes to aliases
-            '--out_dir', str(output_path),  # Note: --out_dir (not --outdir) per workflow help output
+            '--fastq', str(fast_pass_path_abs),  # Parent directory containing sample subdirectories
+            '--sample_sheet', str(samplesheet_file_abs),  # CSV mapping barcodes to aliases
+            '--out_dir', str(output_path_abs),  # Note: --out_dir (not --outdir) per workflow help output
             '--approx_size', str(config['assembly']['approx_size']),
             '--assm_coverage', str(config['assembly']['coverage']),  # Note: parameter is assm_coverage, not coverage
             '--assembly_tool', config['assembly']['assembly_tool'],
@@ -163,8 +169,9 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
             cmd.extend(['--primers', str(config['assembly']['primers'])])
         
         logger.info("Running epi2me wf-clone-validation workflow...")
-        logger.info(f"  Samplesheet: {samplesheet_file}")
-        logger.info(f"  Output directory: {output_path}")
+        logger.info(f"  Samplesheet: {samplesheet_file_abs}")
+        logger.info(f"  Output directory: {output_path_abs}")
+        logger.info(f"  Fastq directory: {fast_pass_path_abs}")
         logger.info(f"  Profile: {profile}")
         logger.info(f"  Nextflow version: {env.get('NXF_VER', 'default')}")
         logger.info(f"  Work directory: {nextflow_work_dir}")
