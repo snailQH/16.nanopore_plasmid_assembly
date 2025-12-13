@@ -263,6 +263,7 @@ if [[ "$SKIP_ASSEMBLY" != "true" ]]; then
     # User can specify:
     # 1. Parent directory containing fastq/ or fast_pass/ subdirectory
     # 2. Direct fastq/fast_pass directory path
+    # 3. Parent directory containing subdirectories with *-Raw/ or similar patterns
     if [[ -d "$INPUT_DIR/fastq" ]]; then
         # Demo data structure: wf-clone-validation-demo/fastq/
         FASTQ_DIR="$INPUT_DIR/fastq"
@@ -273,26 +274,50 @@ if [[ "$SKIP_ASSEMBLY" != "true" ]]; then
         # Input directory is directly the fastq/fast_pass directory
         FASTQ_DIR="$INPUT_DIR"
     else
-        # Check if INPUT_DIR itself contains FASTQ files (treat as fastq directory)
-        if find "$INPUT_DIR" -maxdepth 2 -name "*.fastq*" -o -name "*.fq*" 2>/dev/null | head -1 | grep -q .; then
-            FASTQ_DIR="$INPUT_DIR"
+        # Check if INPUT_DIR itself contains sample subdirectories with FASTQ files
+        # Look for subdirectories containing FASTQ files directly
+        SAMPLE_DIRS_WITH_FASTQ=$(find "$INPUT_DIR" -maxdepth 2 -type d -exec sh -c 'find "$1" -maxdepth 1 -name "*.fastq*" -o -name "*.fq*" | head -1 | grep -q .' _ {} \; -print 2>/dev/null | head -1)
+        
+        if [[ -n "$SAMPLE_DIRS_WITH_FASTQ" ]]; then
+            # Found subdirectories with FASTQ files, check if they're nested
+            # If parent directory has multiple subdirectories, use parent as FASTQ_DIR
+            PARENT_DIR=$(dirname "$SAMPLE_DIRS_WITH_FASTQ")
+            if [[ "$PARENT_DIR" != "$INPUT_DIR" ]] && [[ -d "$PARENT_DIR" ]]; then
+                # Check if this looks like a project directory (e.g., CT121125GS-Raw/)
+                if [[ "$(basename "$PARENT_DIR")" =~ .*-Raw$ ]] || [[ "$(basename "$PARENT_DIR")" =~ .*-raw$ ]]; then
+                    FASTQ_DIR="$PARENT_DIR"
+                    log "Detected project directory structure: $(basename "$FASTQ_DIR")"
+                else
+                    FASTQ_DIR="$PARENT_DIR"
+                fi
+            else
+                FASTQ_DIR="$INPUT_DIR"
+            fi
         else
-            log "ERROR: Could not find fastq or fast_pass directory in: $INPUT_DIR"
-            exit 1
+            # Last resort: check if INPUT_DIR itself contains FASTQ files directly
+            if find "$INPUT_DIR" -maxdepth 2 -name "*.fastq*" -o -name "*.fq*" 2>/dev/null | head -1 | grep -q .; then
+                FASTQ_DIR="$INPUT_DIR"
+            else
+                log "ERROR: Could not find fastq or fast_pass directory in: $INPUT_DIR"
+                log "Expected structure:"
+                log "  - input_dir/fastq/ or input_dir/fast_pass/ with sample subdirectories"
+                log "  - input_dir/*-Raw/ with sample subdirectories containing FASTQ files"
+                exit 1
+            fi
         fi
     fi
     
     log "Detected FASTQ directory: $FASTQ_DIR"
     
     # Generate samplesheet
-    # Note: samplesheet generation will create symbolic links in fast_pass directory
-    # if directory names don't match barcode format (barcode01, barcode02, etc.)
-    # We need to mount fast_pass as read-write (not :ro) to allow link creation
+    # Note: samplesheet generation will merge multiple FASTQ files per sample (if needed)
+    # and create barcode directories with merged files if directory names don't match barcode format
+    # We need to mount fast_pass as read-write (not :ro) to allow directory/file creation
     SAMPLESHEET="$OUTPUT_DIR/01.assembly/samplesheet.csv"
     mkdir -p "$(dirname "$SAMPLESHEET")"
     
     log "Generating samplesheet..."
-    log "Note: Symbolic links will be created in fastq directory if needed for barcode mapping"
+    log "Note: Multiple FASTQ files per sample will be merged, and barcode directories will be created if needed"
     
     # Validate FASTQ_DIR is set and exists
     if [[ -z "$FASTQ_DIR" ]] || [[ ! -d "$FASTQ_DIR" ]]; then

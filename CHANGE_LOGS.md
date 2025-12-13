@@ -2,6 +2,39 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-12 - Fixed FASTQ File Merging and Nextflow Directory Conflicts
+
+### Problem:
+1. **Multiple FASTQ files per sample**: Some sample directories contain multiple `fastq.gz` files that need to be merged before analysis
+2. **Nextflow directory conflicts**: Creating symbolic links for barcode mapping caused Nextflow to see both original directories and symlinks, resulting in "Found conflicting folders" error
+3. **Input directory detection**: Pipeline couldn't properly detect data in `*-Raw/` subdirectories (e.g., `CT121125GS-Raw/`)
+
+### Solution:
+1. **Added FASTQ merging**: Modified `generate_samplesheet.py` to automatically merge multiple `fastq.gz` files per sample using `zcat` and `gzip`
+2. **Replaced symlinks with directories**: Instead of creating symbolic links, now creates new barcode-named directories with merged FASTQ files to avoid Nextflow conflicts
+3. **Improved input detection**: Enhanced `run_pipeline.sh` to detect `*-Raw/` project directories and handle nested sample directory structures
+
+### Files Modified:
+- `scripts/generate_samplesheet.py`: 
+  - Added `merge_fastq_files()` function to merge multiple FASTQ.gz files
+  - Changed from symlink creation to directory creation with merged files
+  - Added handling for existing directories and symlinks
+- `run_pipeline.sh`: 
+  - Improved FASTQ directory detection to handle `*-Raw/` subdirectories
+  - Updated comments to reflect new merging behavior instead of symlink creation
+
+### Key Changes:
+- Merge logic: Uses `zcat file1.gz file2.gz ... | gzip > merged.gz` to combine FASTQ files
+- Directory strategy: Creates new `barcodeXX/` directories with merged files instead of symlinks
+- Conflict prevention: Removes existing symlinks before creating directories
+- Input flexibility: Supports `input_dir/fastq/`, `input_dir/fast_pass/`, `input_dir/*-Raw/`, and direct sample directories
+
+### Impact:
+- Resolves "Found conflicting folders" errors from Nextflow
+- Automatically handles samples with multiple FASTQ files
+- Supports more flexible input directory structures
+- Preserves original data (only creates new directories/files, doesn't modify originals)
+
 ## 2025-12-09 - Added Automatic Nextflow Lock File Cleanup
 
 ### Problem:
