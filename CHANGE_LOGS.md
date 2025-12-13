@@ -2,6 +2,35 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Enable Assembly Step in Docker Container Mode
+
+### Problem:
+- When running `run_pipeline.py` inside Docker container, assembly step was automatically skipped
+- Error: "Assembly results not found. Please run run_pipeline.sh first."
+- Even with Docker socket mounted, assembly couldn't run inside Docker
+
+### Solution:
+- Modified `run_pipeline.py` to detect Docker environment and Docker socket availability
+- If Docker socket is available, assembly can now run inside Docker container
+- If Docker socket is not available, provides clear error message with solutions
+
+### Files Modified:
+- `scripts/run_pipeline.py`: 
+  - Added Docker environment detection (`/.dockerenv`)
+  - Added Docker socket detection (`/var/run/docker.sock`)
+  - Modified Step 1 logic to run assembly if Docker socket is available
+  - Provides helpful error messages if Docker socket is missing
+
+### Key Changes:
+- Detection: Checks for `/.dockerenv` and `/var/run/docker.sock`
+- Logic: Runs assembly if Docker socket is available, otherwise provides helpful errors
+- User experience: Clear messages about what's needed to run assembly in Docker
+
+### Impact:
+- Full pipeline can now run inside Docker container with Docker socket mounted
+- Better error messages when Docker socket is missing
+- Supports both HOST and Docker execution modes seamlessly
+
 ## 2025-12-12 - Fixed FASTQ File Merging and Nextflow Directory Conflicts
 
 ### Problem:

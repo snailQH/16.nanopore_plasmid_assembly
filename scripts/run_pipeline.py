@@ -187,17 +187,65 @@ def main():
         sys.exit(1)
     
     # Step 1: Assembly (epi2me workflow)
-    # NOTE: Assembly is now handled by run_pipeline.sh on the HOST machine
-    # This allows Nextflow to use Docker containers for processes (medaka, flye, etc.)
+    # Check if running inside Docker and if Docker socket is available
+    is_docker = os.path.exists('/.dockerenv')
+    docker_socket_available = os.path.exists('/var/run/docker.sock')
+    
     if not args.skip_assembly:
-        logger.warning("\n[Step 1] Assembly step should be run on HOST using run_pipeline.sh")
-        logger.warning("Skipping assembly in Docker container mode")
-        logger.info("If you need to run assembly here, use run_pipeline.sh instead")
-        assembly_dir = output_path / "01.assembly"
-        # Check if assembly results already exist
-        if not (assembly_dir / "samplesheet.csv").exists():
-            logger.error("Assembly results not found. Please run run_pipeline.sh first.")
-            sys.exit(1)
+        if is_docker:
+            if docker_socket_available:
+                # Running inside Docker with Docker socket - can run assembly
+                logger.info("\n[Step 1] Running epi2me workflow (inside Docker with Docker socket)...")
+                try:
+                    # Load config
+                    import yaml
+                    with open(config_file, 'r') as f:
+                        config = yaml.safe_load(f)
+                    
+                    # Run assembly step
+                    assembly_dir = step1.run_epi2me_workflow(
+                        config_file=str(config_file),
+                        input_dir=str(input_path),
+                        output_dir=str(output_path),
+                        verbose=args.verbose
+                    )
+                    logger.info(f"✓ Assembly complete. Results: {assembly_dir}")
+                except Exception as e:
+                    logger.error(f"✗ Assembly failed: {e}")
+                    sys.exit(1)
+            else:
+                # Running inside Docker but no Docker socket - cannot run assembly
+                logger.warning("\n[Step 1] Running inside Docker but Docker socket not available")
+                logger.warning("Cannot run assembly without Docker socket access")
+                logger.warning("Please either:")
+                logger.warning("  1. Mount Docker socket: -v /var/run/docker.sock:/var/run/docker.sock")
+                logger.warning("  2. Run assembly on HOST using run_pipeline.sh")
+                logger.warning("  3. Use --skip-assembly if assembly is already complete")
+                assembly_dir = output_path / "01.assembly"
+                # Check if assembly results already exist
+                if not (assembly_dir / "samplesheet.csv").exists():
+                    logger.error("Assembly results not found. Please run assembly first.")
+                    sys.exit(1)
+        else:
+            # Running on HOST - can run assembly normally
+            logger.info("\n[Step 1] Running epi2me workflow...")
+            try:
+                # Load config
+                import yaml
+                with open(config_file, 'r') as f:
+                    config = yaml.safe_load(f)
+                
+                # Run assembly step
+                assembly_dir = step1.run_epi2me_workflow(
+                    config_file=str(config_file),
+                    input_dir=str(input_path),
+                    output_dir=str(output_path),
+                    verbose=args.verbose
+                )
+                logger.info(f"✓ Assembly complete. Results: {assembly_dir}")
+            except Exception as e:
+                logger.error(f"✗ Assembly failed: {e}")
+                sys.exit(1)
     else:
         logger.info("\n[Step 1] Skipping assembly step")
         assembly_dir = output_path / "01.assembly"
