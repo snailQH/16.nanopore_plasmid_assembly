@@ -109,7 +109,7 @@ def generate_samplesheet(fast_pass_dir, output_file, approx_size=None, verbose=F
     
     # Find all sample directories
     # Filter out symbolic links - we only want actual directories
-    # We'll create symbolic links later for barcode mapping
+    # We'll create new barcode directories with merged files if needed
     sample_dirs = [
         d for d in fast_pass_path.iterdir() 
         if d.is_dir() and not d.is_symlink()
@@ -173,21 +173,25 @@ def generate_samplesheet(fast_pass_dir, output_file, approx_size=None, verbose=F
             else:
                 logging.info(f"  {sample_id}: Single FASTQ file, no merge needed")
         else:
-            # Create new barcode directory
-            if barcode_dir.exists() and not barcode_dir.is_symlink():
-                # Directory exists and is not a symlink, check if it's the same as sample_dir
-                if barcode_dir.resolve() == sample_dir.resolve():
-                    logging.info(f"  {sample_id}: Barcode directory already exists and matches sample")
-                else:
-                    logging.warning(f"  {sample_id}: Barcode directory {barcode} exists but is different, removing")
-                    import shutil
-                    shutil.rmtree(barcode_dir)
+            # Create new barcode directory (not a symlink to avoid Nextflow conflicts)
+            if barcode_dir.exists():
+                if barcode_dir.is_symlink():
+                    # Remove existing symlink to avoid Nextflow conflicts
+                    logging.info(f"  {sample_id}: Removing existing symlink {barcode}")
+                    barcode_dir.unlink()
                     barcode_dir.mkdir(parents=True, exist_ok=True)
-            elif barcode_dir.is_symlink():
-                # Remove existing symlink to avoid Nextflow conflicts
-                logging.info(f"  {sample_id}: Removing existing symlink {barcode}")
-                barcode_dir.unlink()
-                barcode_dir.mkdir(parents=True, exist_ok=True)
+                elif barcode_dir.is_dir():
+                    # Directory exists, check if it has files
+                    existing_files = list(barcode_dir.glob("*.fastq*"))
+                    if existing_files:
+                        logging.info(f"  {sample_id}: Barcode directory {barcode} already exists with {len(existing_files)} file(s), reusing")
+                    else:
+                        logging.info(f"  {sample_id}: Barcode directory {barcode} exists but is empty, will add files")
+                else:
+                    # Exists but not a directory, remove and create directory
+                    logging.warning(f"  {sample_id}: Removing existing non-directory {barcode}")
+                    barcode_dir.unlink()
+                    barcode_dir.mkdir(parents=True, exist_ok=True)
             else:
                 barcode_dir.mkdir(parents=True, exist_ok=True)
             
