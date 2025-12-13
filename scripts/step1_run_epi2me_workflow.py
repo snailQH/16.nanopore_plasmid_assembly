@@ -103,6 +103,16 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     is_docker = os.path.exists('/.dockerenv')
     profile = 'standard'  # Always use 'standard' profile as per user's successful test
     
+    # For Docker-in-Docker: Get host path from environment variable
+    # When running inside Docker, we need to pass the HOST output directory path
+    # so that sub-containers can mount the same host path
+    host_output_dir = os.environ.get('HOST_OUTPUT_DIR')
+    if is_docker and host_output_dir:
+        logger.info(f"Detected HOST_OUTPUT_DIR environment variable: {host_output_dir}")
+    elif is_docker:
+        logger.warning("Running in Docker but HOST_OUTPUT_DIR not set. Sub-containers may not access work files correctly.")
+        logger.warning("Set HOST_OUTPUT_DIR to the host path of the output directory when running docker run")
+    
     # For Docker-in-Docker: Try to get host path from mounted volume
     # The output directory is mounted from host, so we need to find the host path
     # This is tricky because we're inside a container - we'll try to use the same path
@@ -176,9 +186,24 @@ docker {
         # Mount the entire output directory so sub-containers can access work files
         # This is critical for Docker-in-Docker scenarios
         if is_docker:
-            # Escape the path for the config file
-            output_path_escaped = output_path_abs_str.replace("'", "\\'")
-            config_content += f"    runOptions = '-v {output_path_escaped}:{output_path_escaped}'\n"
+            # Use HOST path if available, otherwise try container path (may not work)
+            if host_output_dir:
+                # Use host path for mounting to sub-containers
+                # Both host and container paths should point to the same directory
+                host_output_path = Path(host_output_dir).resolve()
+                host_path_str = str(host_output_path)
+                container_path_str = output_path_abs_str
+                
+                # Mount: host_path:container_path (same as main container mount)
+                host_path_escaped = host_path_str.replace("'", "\\'").replace(' ', '\\ ')
+                container_path_escaped = container_path_str.replace("'", "\\'").replace(' ', '\\ ')
+                config_content += f"    runOptions = '-v {host_path_escaped}:{container_path_escaped}'\n"
+                logger.info(f"  Using HOST path for Docker executor: {host_path_str} -> {container_path_str}")
+            else:
+                # Fallback: try container path (may not work in all cases)
+                output_path_escaped = output_path_abs_str.replace("'", "\\'").replace(' ', '\\ ')
+                config_content += f"    runOptions = '-v {output_path_escaped}:{output_path_escaped}'\n"
+                logger.warning(f"  Using container path (HOST_OUTPUT_DIR not set): {output_path_escaped}")
         
         config_content += "}\n"
         f.write(config_content)

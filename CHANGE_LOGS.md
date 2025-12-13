@@ -2,6 +2,52 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Fix Docker-in-Docker Path Mapping - Use HOST_OUTPUT_DIR Environment Variable
+
+### Problem:
+- Nextflow sub-containers still cannot access work files: `/bin/bash: .command.run: No such file or directory`
+- In Docker-in-Docker, sub-containers need to mount the HOST path, not the container path
+- Container path `/data/output/01.assembly/work` doesn't exist on the host
+- Need to map host path to container path for sub-containers
+
+### Solution:
+- Added `HOST_OUTPUT_DIR` environment variable support
+- When running in Docker, read `HOST_OUTPUT_DIR` to get the actual host path
+- Use host path to mount to sub-containers: `-v HOST_PATH:CONTAINER_PATH`
+- Updated `docker_run_full_pipeline.sh` to automatically pass `HOST_OUTPUT_DIR`
+- Added fallback warning if `HOST_OUTPUT_DIR` is not set
+
+### Files Modified:
+- `scripts/step1_run_epi2me_workflow.py`:
+  - Added `HOST_OUTPUT_DIR` environment variable reading
+  - Modified Docker runOptions to use host path for mounting
+  - Added logging for path mapping
+  - Added warning if `HOST_OUTPUT_DIR` not set in Docker
+- `docker_run_full_pipeline.sh`:
+  - Added `-e "HOST_OUTPUT_DIR=${OUTPUT_DIR}"` to pass host path to container
+
+### Key Changes:
+- Host path mapping: `-v HOST_PATH:CONTAINER_PATH` (same as main container)
+- Environment variable: `HOST_OUTPUT_DIR` passed from host to container
+- Path resolution: Uses host path for sub-container mounts
+
+### Impact:
+- Sub-containers can now access work files on the host
+- Proper path mapping between host and container
+- Automatic detection of Docker-in-Docker scenario
+
+### Usage:
+When running docker manually, ensure to pass HOST_OUTPUT_DIR:
+```bash
+docker run --rm -it \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "${INPUT_DIR}:/data/input:ro" \
+  -v "${OUTPUT_DIR}:/data/output" \
+  -e "HOST_OUTPUT_DIR=${OUTPUT_DIR}" \
+  nanopore-plasmid-pipeline:latest \
+  --input /data/input --output /data/output ...
+```
+
 ## 2025-12-13 - Fix Nextflow Config Override - Remove Invalid Executor Setting
 
 ### Problem:
