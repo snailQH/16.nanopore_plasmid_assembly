@@ -2,6 +2,38 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Fix Nextflow Work Directory Configuration in Docker
+
+### Problem:
+- Nextflow workflow failed with error: `/bin/bash: .command.run: No such file or directory`
+- Exit status 127 indicates Nextflow cannot create or access work files
+- Work directory path `/data/work/` may not be accessible or writable in Docker container
+
+### Solution:
+- Set explicit Nextflow work directory using `-work-dir` parameter
+- Set `NXF_WORK` environment variable to output directory
+- Change working directory to output path before running Nextflow
+- Set `NXF_TEMP` and `MPLCONFIGDIR` environment variables for proper temp directory handling
+
+### Files Modified:
+- `scripts/step1_run_epi2me_workflow.py`:
+  - Added `NXF_WORK` environment variable setting
+  - Added `NXF_TEMP` and `MPLCONFIGDIR` environment variables
+  - Changed working directory to output path before running Nextflow
+  - Added `-work-dir` parameter to Nextflow command
+  - Added proper directory restoration in finally block
+
+### Key Changes:
+- Work directory: Explicitly set to `output_dir/work` instead of default `/data/work`
+- Temp directory: Set to `output_dir/.nextflow/tmp`
+- Working directory: Change to output path ensures relative paths work correctly
+- Environment: Proper cleanup with directory restoration
+
+### Impact:
+- Nextflow can now create work files in the correct writable location
+- Prevents "No such file or directory" errors
+- Better isolation of Nextflow work directories per pipeline run
+
 ## 2025-12-13 - Fix Read-Only File System Issue for Barcode Directory Creation
 
 ### Problem:

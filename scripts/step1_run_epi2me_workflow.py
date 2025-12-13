@@ -112,6 +112,23 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     env = os.environ.copy()
     env['NXF_VER'] = '23.10.0'
     
+    # Set Nextflow work directory inside output directory
+    # This ensures work directory is in a writable location
+    nextflow_work_dir = output_path / 'work'
+    nextflow_work_dir.mkdir(parents=True, exist_ok=True)
+    env['NXF_WORK'] = str(nextflow_work_dir)
+    logger.info(f"Setting Nextflow work directory: {nextflow_work_dir}")
+    
+    # Set Nextflow temp directory
+    nextflow_temp_dir = output_path / '.nextflow' / 'tmp'
+    nextflow_temp_dir.mkdir(parents=True, exist_ok=True)
+    env['NXF_TEMP'] = str(nextflow_temp_dir)
+    
+    # Set matplotlib config directory for Docker containers
+    matplotlib_dir = output_path / '.nextflow' / 'matplotlib'
+    matplotlib_dir.mkdir(parents=True, exist_ok=True)
+    env['MPLCONFIGDIR'] = str(matplotlib_dir)
+    
     # Pull workflow first
     logger.info(f"Pulling epi2me workflow {workflow_version}...")
     pull_cmd = ['nextflow', 'pull', workflow_ref, '-r', workflow_version]
@@ -119,20 +136,27 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     if pull_result.returncode != 0:
         logger.warning(f"Failed to pull {workflow_version}: {pull_result.stderr}")
     
-    # Build command matching user's successful test command
-    cmd = [
-        'nextflow', 'run',
-        workflow_ref,
-        '-r', workflow_version,  # Use v1.8.3 (latest stable)
-        '--fastq', str(fast_pass_path),  # Parent directory containing sample subdirectories
-        '--sample_sheet', str(samplesheet_file),  # CSV mapping barcodes to aliases
-        '--out_dir', str(output_path),  # Note: --out_dir (not --outdir) per workflow help output
-        '--approx_size', str(config['assembly']['approx_size']),
-        '--assm_coverage', str(config['assembly']['coverage']),  # Note: parameter is assm_coverage, not coverage
-        '--assembly_tool', config['assembly']['assembly_tool'],
-        '-profile', profile,  # Use 'standard' profile (requires Docker for processes)
-        '-resume'  # Allow resume if interrupted
-    ]
+    # Change to output directory before running Nextflow
+    # This ensures Nextflow creates work directory in the correct location
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(str(output_path))
+        
+        # Build command matching user's successful test command
+        cmd = [
+            'nextflow', 'run',
+            workflow_ref,
+            '-r', workflow_version,  # Use v1.8.3 (latest stable)
+            '--fastq', str(fast_pass_path),  # Parent directory containing sample subdirectories
+            '--sample_sheet', str(samplesheet_file),  # CSV mapping barcodes to aliases
+            '--out_dir', str(output_path),  # Note: --out_dir (not --outdir) per workflow help output
+            '--approx_size', str(config['assembly']['approx_size']),
+            '--assm_coverage', str(config['assembly']['coverage']),  # Note: parameter is assm_coverage, not coverage
+            '--assembly_tool', config['assembly']['assembly_tool'],
+            '-profile', profile,  # Use 'standard' profile (requires Docker for processes)
+            '-work-dir', str(nextflow_work_dir),  # Explicitly set work directory
+            '-resume'  # Allow resume if interrupted
+        ]
     
     # Add primers if specified in config (optional)
     if 'primers' in config.get('assembly', {}) and config['assembly'].get('primers'):
@@ -146,31 +170,34 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     logger.info(f"  Note: Running inside Docker - ensure Docker socket is mounted for -profile standard")
     logger.debug(f"Command: {' '.join(cmd)}")
     
-    # Run Nextflow workflow with NXF_VER environment variable
-    # Always capture output to get error details
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        env=env  # Pass environment with NXF_VER=23.10.0
-    )
-    
-    if result.returncode != 0:
-        logger.error("epi2me workflow failed")
-        if result.stderr:
-            logger.error(f"Error output:\n{result.stderr}")
-        if result.stdout:
-            # Log last 50 lines of stdout for debugging
-            stdout_lines = result.stdout.split('\n')
-            logger.error(f"Nextflow output (last 50 lines):\n" + '\n'.join(stdout_lines[-50:]))
-        raise RuntimeError("epi2me workflow failed")
-    else:
-        # Log success output if verbose
-        if verbose and result.stdout:
-            logger.debug(f"Nextflow output:\n{result.stdout}")
-    
-    logger.info("✓ Completed epi2me workflow")
-    return str(output_path)
+        # Run Nextflow workflow with NXF_VER environment variable
+        # Always capture output to get error details
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            env=env  # Pass environment with NXF_VER=23.10.0
+        )
+        
+        if result.returncode != 0:
+            logger.error("epi2me workflow failed")
+            if result.stderr:
+                logger.error(f"Error output:\n{result.stderr}")
+            if result.stdout:
+                # Log last 50 lines of stdout for debugging
+                stdout_lines = result.stdout.split('\n')
+                logger.error(f"Nextflow output (last 50 lines):\n" + '\n'.join(stdout_lines[-50:]))
+            raise RuntimeError("epi2me workflow failed")
+        else:
+            # Log success output if verbose
+            if verbose and result.stdout:
+                logger.debug(f"Nextflow output:\n{result.stdout}")
+        
+        logger.info("✓ Completed epi2me workflow")
+        return str(output_path)
+    finally:
+        # Restore original working directory
+        os.chdir(original_cwd)
 
 def run_epi2me_workflow(config_file, input_dir, output_dir, verbose=False):
     """Run epi2me workflow for all samples."""
