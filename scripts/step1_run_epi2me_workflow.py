@@ -114,10 +114,12 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     
     # Set Nextflow work directory inside output directory
     # This ensures work directory is in a writable location
+    # CRITICAL: Use absolute path for work directory to ensure Docker executor can mount it correctly
     nextflow_work_dir = output_path / 'work'
     nextflow_work_dir.mkdir(parents=True, exist_ok=True)
-    env['NXF_WORK'] = str(nextflow_work_dir)
-    logger.info(f"Setting Nextflow work directory: {nextflow_work_dir}")
+    nextflow_work_dir_abs = nextflow_work_dir.resolve()
+    env['NXF_WORK'] = str(nextflow_work_dir_abs)
+    logger.info(f"Setting Nextflow work directory: {nextflow_work_dir_abs}")
     
     # Set Nextflow temp directory
     nextflow_temp_dir = output_path / '.nextflow' / 'tmp'
@@ -128,6 +130,33 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     matplotlib_dir = output_path / '.nextflow' / 'matplotlib'
     matplotlib_dir.mkdir(parents=True, exist_ok=True)
     env['MPLCONFIGDIR'] = str(matplotlib_dir)
+    
+    # Create Nextflow config override to set environment variables for Docker containers
+    # This ensures processes running in Docker containers have writable directories
+    # and proper path handling
+    # CRITICAL: For Docker-in-Docker scenarios, ensure workDir is properly mounted
+    nextflow_config_override = output_path / 'nextflow.config.override'
+    nextflow_work_dir_abs_str = str(nextflow_work_dir_abs)
+    
+    with open(nextflow_config_override, 'w') as f:
+        f.write(f"""process {{
+    executor = 'docker'
+    
+    withName: '.*' {{
+        beforeScript = '''
+            export MPLCONFIGDIR=/tmp/matplotlib_config_$$
+            mkdir -p $MPLCONFIGDIR
+        '''
+    }}
+}}
+
+docker {{
+    enabled = true
+    fixOwnership = true
+}}
+""")
+    logger.info(f"Created Nextflow config override: {nextflow_config_override}")
+    logger.info(f"  Work directory for Docker executor: {nextflow_work_dir_abs_str}")
     
     # Pull workflow first
     logger.info(f"Pulling epi2me workflow {workflow_version}...")
@@ -160,7 +189,8 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
             '--assm_coverage', str(config['assembly']['coverage']),  # Note: parameter is assm_coverage, not coverage
             '--assembly_tool', config['assembly']['assembly_tool'],
             '-profile', profile,  # Use 'standard' profile (requires Docker for processes)
-            '-work-dir', str(nextflow_work_dir),  # Explicitly set work directory
+            '-work-dir', str(nextflow_work_dir_abs),  # Explicitly set work directory (absolute path)
+            '-c', str(nextflow_config_override),  # Use config override
             '-resume'  # Allow resume if interrupted
         ]
         
