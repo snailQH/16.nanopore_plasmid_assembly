@@ -110,23 +110,13 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     host_output_dir = os.environ.get('HOST_OUTPUT_DIR')
     if host_output_dir:
         # Remove trailing slashes and normalize (but don't resolve to absolute path)
+        # Keep as raw string value from environment variable
         host_output_dir = host_output_dir.rstrip('/')
     if is_docker and host_output_dir:
         logger.info(f"Detected HOST_OUTPUT_DIR environment variable: {host_output_dir}")
     elif is_docker:
         logger.warning("Running in Docker but HOST_OUTPUT_DIR not set. Sub-containers may not access work files correctly.")
         logger.warning("Set HOST_OUTPUT_DIR to the host path of the output directory when running docker run")
-    
-    # For Docker-in-Docker: Try to get host path from mounted volume
-    # The output directory is mounted from host, so we need to find the host path
-    # This is tricky because we're inside a container - we'll try to use the same path
-    # and rely on Docker volume mounts to make it work
-    host_output_dir = None
-    if is_docker:
-        # In Docker-in-Docker, the output directory should be mounted from host
-        # We'll use the container path and let Nextflow's Docker executor handle it
-        # The key is that the same volume must be mounted in sub-containers
-        host_output_dir = str(output_path.resolve())
     
     # Use short form workflow reference (works same as full URL)
     workflow_ref = 'epi2me-labs/wf-clone-validation'
