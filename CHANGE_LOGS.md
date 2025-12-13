@@ -2,6 +2,34 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Add Nextflow Config Override for Docker Executor
+
+### Problem:
+- Nextflow workflow still failing with `/bin/bash: .command.run: No such file or directory`
+- Docker executor cannot access work directory in Docker-in-Docker scenario
+- Need proper Docker executor configuration for processes
+
+### Solution:
+- Added Nextflow config override file with explicit Docker executor settings
+- Enabled `fixOwnership` for Docker executor to handle file permissions
+- Used absolute paths for work directory throughout
+- Added Docker executor configuration in config override
+
+### Files Modified:
+- `scripts/step1_run_epi2me_workflow.py`:
+  - Added Docker executor configuration in Nextflow config override
+  - Enabled `fixOwnership` for proper file permission handling
+  - Improved logging for work directory paths
+
+### Key Changes:
+- Docker executor: Explicitly configured in Nextflow config
+- File permissions: Enabled `fixOwnership` to handle permission issues
+- Path handling: Using absolute paths consistently
+
+### Impact:
+- Better Docker executor configuration for Docker-in-Docker scenarios
+- Should resolve work directory access issues
+
 ## 2025-12-13 - Fix Nextflow Work Directory Configuration in Docker
 
 ### Problem:
