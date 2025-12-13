@@ -325,9 +325,21 @@ if [[ "$SKIP_ASSEMBLY" != "true" ]]; then
         exit 1
     fi
     
-    docker run --rm \
-        -v "${FASTQ_DIR}:/data/input/fastq" \
-        -v "$(dirname "$SAMPLESHEET"):/data/output" \
+    # Optionally mount local scripts directory (for development/testing without rebuild)
+    # Set USE_LOCAL_SCRIPTS=1 environment variable to enable
+    DOCKER_RUN_ARGS=(
+        --rm
+        -v "${FASTQ_DIR}:/data/input/fastq"
+        -v "$(dirname "$SAMPLESHEET"):/data/output"
+    )
+    
+    if [[ "${USE_LOCAL_SCRIPTS:-0}" == "1" ]]; then
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        DOCKER_RUN_ARGS+=(-v "${SCRIPT_DIR}/scripts:/opt/pipeline/scripts:ro")
+        log "Using local scripts from: ${SCRIPT_DIR}/scripts"
+    fi
+    
+    docker run "${DOCKER_RUN_ARGS[@]}" \
         --entrypoint python3 \
         "$DOCKER_IMAGE" \
         /opt/pipeline/scripts/generate_samplesheet.py \
