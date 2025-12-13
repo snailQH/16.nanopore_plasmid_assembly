@@ -228,6 +228,7 @@ Alternatively, use the provided wrapper script:
     # Write Nextflow config override
     # CRITICAL: For Docker-in-Docker, we need to ensure work directory is accessible
     # The work directory must be mounted from HOST to sub-containers
+    # Nextflow creates .command.run files in work directory, and sub-containers need access to them
     with open(nextflow_config_override, 'w') as f:
         config_content = """process {
     withName: '.*' {
@@ -243,6 +244,8 @@ Alternatively, use the provided wrapper script:
 docker {
     enabled = true
     fixOwnership = true
+    // Remove user/group mappings that might cause permission issues
+    // Nextflow will handle ownership fixes via fixOwnership
 """
         if docker_run_options:
             # Escape single quotes and backslashes in runOptions string for Nextflow config
