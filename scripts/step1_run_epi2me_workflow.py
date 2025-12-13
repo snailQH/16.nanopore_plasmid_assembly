@@ -164,10 +164,18 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     nextflow_work_dir_abs_str = str(nextflow_work_dir_abs)
     output_path_abs_str = str(output_path_abs)
     
-    # For Docker-in-Docker: Mount the entire output directory to sub-containers
-    # This ensures sub-containers can access work files
-    # The output directory is already mounted from host, so we mount the same path
-    output_path_abs_str = str(output_path.resolve())
+    # Calculate relative path from base output directory to current output_path
+    # This is needed to map container paths to host paths
+    # output_path is typically /data/output/01.assembly
+    # We need to find what part is relative to /data/output
+    base_output_in_container = Path('/data/output')
+    if str(output_path_abs).startswith(str(base_output_in_container)):
+        # Get relative path from /data/output to output_path
+        # e.g., /data/output/01.assembly -> 01.assembly
+        relative_path = output_path_abs.relative_to(base_output_in_container)
+    else:
+        # Fallback: assume output_path is the base
+        relative_path = Path('.')
     
     with open(nextflow_config_override, 'w') as f:
         config_content = """process {
@@ -189,16 +197,25 @@ docker {
             # Use HOST path if available, otherwise try container path (may not work)
             if host_output_dir:
                 # Use host path for mounting to sub-containers
-                # Both host and container paths should point to the same directory
-                host_output_path = Path(host_output_dir).resolve()
-                host_path_str = str(host_output_path)
-                container_path_str = output_path_abs_str
+                # Calculate the actual host path corresponding to container path
+                host_output_base = Path(host_output_dir).resolve()
+                
+                # Build the host path: host_output_base + relative_path
+                # e.g., /opt/.../fast_pass_results + 01.assembly = /opt/.../fast_pass_results/01.assembly
+                if str(relative_path) == '.':
+                    host_path = host_output_base
+                else:
+                    host_path = host_output_base / relative_path
+                
+                host_path_str = str(host_path.resolve())
+                container_path_str = str(output_path_abs)
                 
                 # Mount: host_path:container_path (same as main container mount)
                 host_path_escaped = host_path_str.replace("'", "\\'").replace(' ', '\\ ')
                 container_path_escaped = container_path_str.replace("'", "\\'").replace(' ', '\\ ')
                 config_content += f"    runOptions = '-v {host_path_escaped}:{container_path_escaped}'\n"
                 logger.info(f"  Using HOST path for Docker executor: {host_path_str} -> {container_path_str}")
+                logger.info(f"  Host base: {host_output_base}, Relative: {relative_path}")
             else:
                 # Fallback: try container path (may not work in all cases)
                 output_path_escaped = output_path_abs_str.replace("'", "\\'").replace(' ', '\\ ')
