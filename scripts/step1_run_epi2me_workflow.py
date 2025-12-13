@@ -106,7 +106,11 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     # For Docker-in-Docker: Get host path from environment variable
     # When running inside Docker, we need to pass the HOST output directory path
     # so that sub-containers can mount the same host path
+    # IMPORTANT: Keep as string, don't resolve in container (would resolve to container path)
     host_output_dir = os.environ.get('HOST_OUTPUT_DIR')
+    if host_output_dir:
+        # Remove trailing slashes and normalize (but don't resolve to absolute path)
+        host_output_dir = host_output_dir.rstrip('/')
     if is_docker and host_output_dir:
         logger.info(f"Detected HOST_OUTPUT_DIR environment variable: {host_output_dir}")
     elif is_docker:
@@ -164,18 +168,10 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     nextflow_work_dir_abs_str = str(nextflow_work_dir_abs)
     output_path_abs_str = str(output_path_abs)
     
-    # Calculate relative path from base output directory to current output_path
-    # This is needed to map container paths to host paths
-    # output_path is typically /data/output/01.assembly
-    # We need to find what part is relative to /data/output
+    # For Docker-in-Docker: We need to mount the base output directory, not subdirectories
+    # epi2me workflow already handles mounting of subdirectories, so we mount the base
+    # This avoids duplicate mount point errors
     base_output_in_container = Path('/data/output')
-    if str(output_path_abs).startswith(str(base_output_in_container)):
-        # Get relative path from /data/output to output_path
-        # e.g., /data/output/01.assembly -> 01.assembly
-        relative_path = output_path_abs.relative_to(base_output_in_container)
-    else:
-        # Fallback: assume output_path is the base
-        relative_path = Path('.')
     
     with open(nextflow_config_override, 'w') as f:
         config_content = """process {
@@ -197,20 +193,21 @@ docker {
             # Use HOST path if available, otherwise try container path (may not work)
             if host_output_dir:
                 # Use host path for mounting to sub-containers
-                # Calculate the actual host path corresponding to container path
-                host_output_base = Path(host_output_dir).resolve()
+                # IMPORTANT: Don't use Path.resolve() here - it would resolve in container filesystem
+                # Keep host_output_dir as provided (absolute host path)
+                host_output_base = host_output_dir.rstrip('/')
                 
                 # Build the host path: host_output_base + relative_path
                 # e.g., /opt/.../fast_pass_results + 01.assembly = /opt/.../fast_pass_results/01.assembly
                 if str(relative_path) == '.':
-                    host_path = host_output_base
+                    host_path_str = host_output_base
                 else:
-                    host_path = host_output_base / relative_path
+                    host_path_str = f"{host_output_base}/{relative_path}"
                 
-                host_path_str = str(host_path.resolve())
                 container_path_str = str(output_path_abs)
                 
                 # Mount: host_path:container_path (same as main container mount)
+                # Escape special characters for Docker runOptions
                 host_path_escaped = host_path_str.replace("'", "\\'").replace(' ', '\\ ')
                 container_path_escaped = container_path_str.replace("'", "\\'").replace(' ', '\\ ')
                 config_content += f"    runOptions = '-v {host_path_escaped}:{container_path_escaped}'\n"
