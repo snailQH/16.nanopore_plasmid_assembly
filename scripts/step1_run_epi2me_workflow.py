@@ -196,15 +196,34 @@ def run_epi2me_workflow(config_file, input_dir, output_dir, verbose=False):
     output_path = Path(output_dir) / '01.assembly'
     output_path.mkdir(parents=True, exist_ok=True)
     
+    # Create work directory for barcode directories (in case input is read-only)
+    # This will contain the processed fastq files with barcode naming
+    work_dir = output_path / 'fastq_processed'
+    work_dir.mkdir(parents=True, exist_ok=True)
+    
     # Generate samplesheet
+    # Use work_dir for creating barcode directories (allows read-only input)
     samplesheet_file = output_path / 'samplesheet.csv'
     logger.info("Generating samplesheet...")
-    generate_samplesheet(str(fast_pass), str(samplesheet_file), logger=logger)
+    logger.info(f"Using work directory for barcode directories: {work_dir}")
+    generate_samplesheet(str(fast_pass), str(samplesheet_file), work_dir=str(work_dir), logger=logger)
     
     # Run epi2me workflow with samplesheet
+    # Use work_dir as fast_pass_dir if it contains barcode directories, otherwise use original fast_pass
+    # Check if work_dir has barcode directories
+    barcode_dirs = list(work_dir.glob('barcode*'))
+    if barcode_dirs:
+        # Use work_dir as the fastq directory for Nextflow
+        fastq_dir_for_nextflow = str(work_dir)
+        logger.info(f"Using processed fastq directory: {fastq_dir_for_nextflow}")
+    else:
+        # No barcode directories in work_dir, use original fast_pass
+        fastq_dir_for_nextflow = str(fast_pass)
+        logger.info(f"Using original fast_pass directory: {fastq_dir_for_nextflow}")
+    
     try:
         assembly_output = run_epi2me_workflow_batch(
-            fast_pass_dir=str(fast_pass),
+            fast_pass_dir=fastq_dir_for_nextflow,
             samplesheet_file=str(samplesheet_file),
             output_dir=str(output_path),
             config=config,
