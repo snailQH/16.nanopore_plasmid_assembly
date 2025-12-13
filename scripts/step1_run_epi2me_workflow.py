@@ -163,6 +163,50 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
     # This avoids duplicate mount point errors
     base_output_in_container = Path('/data/output')
     
+    # Build Docker runOptions based on Docker-in-Docker scenario
+    docker_run_options = ""
+    if is_docker:
+        # Use HOST path if available
+        if host_output_dir:
+            # Use host path for mounting to sub-containers
+            # IMPORTANT: Keep host_output_dir as string - don't resolve in container
+            # The host path should be the base output directory on the host
+            host_path_str = host_output_dir.rstrip('/')
+            container_path_str = '/data/output'
+            
+            # Also mount fastq directory if different from output
+            # Get host input directory path
+            host_input_dir = os.environ.get('HOST_INPUT_DIR', '')
+            mount_options = []
+            
+            # Mount: host_path:container_path (base output directory)
+            # This allows sub-containers to access all subdirectories including work
+            host_path_escaped = host_path_str.replace("'", "\\'").replace(' ', '\\ ')
+            container_path_escaped = container_path_str.replace("'", "\\'").replace(' ', '\\ ')
+            mount_options.append(f'-v {host_path_escaped}:{container_path_escaped}')
+            
+            # Also mount input directory if available
+            if host_input_dir:
+                host_input_str = host_input_dir.rstrip('/')
+                host_input_escaped = host_input_str.replace("'", "\\'").replace(' ', '\\ ')
+                # Mount to same path in container for consistency
+                mount_options.append(f'-v {host_input_escaped}:/data/input:ro')
+            
+            # Combine all mount options
+            docker_run_options = " ".join(mount_options)
+            logger.info(f"  Using HOST base path for Docker executor: {host_path_str} -> {container_path_escaped}")
+            if host_input_dir:
+                logger.info(f"  Also mounting input directory: {host_input_str} -> /data/input:ro")
+            logger.info(f"  This allows sub-containers to access work directory at {output_path_abs_str}")
+        else:
+            # Fallback: try container path (may not work in all cases)
+            base_path_escaped = '/data/output'.replace("'", "\\'").replace(' ', '\\ ')
+            docker_run_options = f"-v {base_path_escaped}:{base_path_escaped}"
+            logger.warning(f"  Using container base path (HOST_OUTPUT_DIR not set): {base_path_escaped}")
+    
+    # Write Nextflow config override
+    # CRITICAL: For Docker-in-Docker, we need to ensure work directory is accessible
+    # The work directory must be mounted from HOST to sub-containers
     with open(nextflow_config_override, 'w') as f:
         config_content = """process {
     withName: '.*' {
@@ -170,6 +214,8 @@ def run_epi2me_workflow_batch(fast_pass_dir, samplesheet_file, output_dir, confi
             export MPLCONFIGDIR=/tmp/matplotlib_config_$$
             mkdir -p $MPLCONFIGDIR
         '''
+        // Don't override containerOptions - let epi2me workflow handle its own mounts
+        // But ensure work directory is accessible via global docker.runOptions
     }
 }
 
@@ -177,31 +223,11 @@ docker {
     enabled = true
     fixOwnership = true
 """
-        # Mount the base output directory so sub-containers can access work files
-        # This is critical for Docker-in-Docker scenarios
-        # IMPORTANT: Mount the base /data/output directory, not subdirectories
-        # epi2me workflow handles mounting of specific paths internally
-        if is_docker:
-            # Use HOST path if available
-            if host_output_dir:
-                # Use host path for mounting to sub-containers
-                # IMPORTANT: Keep host_output_dir as string - don't resolve in container
-                # The host path should be the base output directory on the host
-                host_path_str = host_output_dir.rstrip('/')
-                container_path_str = '/data/output'
-                
-                # Mount: host_path:container_path (base output directory)
-                # This allows sub-containers to access all subdirectories
-                host_path_escaped = host_path_str.replace("'", "\\'").replace(' ', '\\ ')
-                container_path_escaped = container_path_str.replace("'", "\\'").replace(' ', '\\ ')
-                config_content += f"    runOptions = '-v {host_path_escaped}:{container_path_escaped}'\n"
-                logger.info(f"  Using HOST base path for Docker executor: {host_path_str} -> {container_path_escaped}")
-                logger.info(f"  This allows sub-containers to access work directory at {output_path_abs_str}")
-            else:
-                # Fallback: try container path (may not work in all cases)
-                base_path_escaped = '/data/output'.replace("'", "\\'").replace(' ', '\\ ')
-                config_content += f"    runOptions = '-v {base_path_escaped}:{base_path_escaped}'\n"
-                logger.warning(f"  Using container base path (HOST_OUTPUT_DIR not set): {base_path_escaped}")
+        if docker_run_options:
+            # Escape single quotes and backslashes in runOptions string for Nextflow config
+            # Nextflow config uses single quotes for strings, so escape single quotes inside
+            docker_run_options_escaped = docker_run_options.replace("'", "\\'").replace("\\", "\\\\")
+            config_content += f"    runOptions = '{docker_run_options_escaped}'\n"
         
         config_content += "}\n"
         f.write(config_content)

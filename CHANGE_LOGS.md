@@ -2,6 +2,56 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Fix Docker-in-Docker Path Mapping - Add HOST_INPUT_DIR and Improve Config Generation
+
+### Problem:
+- Nextflow sub-containers still cannot access work files: `/bin/bash: .command.run: No such file or directory`
+- Work directory files exist on host but are not accessible in sub-containers
+- Need to mount both input and output directories to sub-containers
+- Config generation had issues with string escaping
+
+### Solution:
+- Added `HOST_INPUT_DIR` environment variable support (in addition to `HOST_OUTPUT_DIR`)
+- Updated `docker_run_full_pipeline.sh` to pass both `HOST_INPUT_DIR` and `HOST_OUTPUT_DIR`
+- Improved Nextflow config generation with proper string escaping
+- Mount both input and output directories to sub-containers for complete path access
+- Added comments in config explaining why we don't override containerOptions
+
+### Files Modified:
+- `scripts/step1_run_epi2me_workflow.py`:
+  - Added `HOST_INPUT_DIR` environment variable reading
+  - Modified Docker runOptions to mount both input and output directories
+  - Improved string escaping in Nextflow config generation (handles backslashes and single quotes)
+  - Added comments about not overriding containerOptions (let epi2me handle its own mounts)
+- `docker_run_full_pipeline.sh`:
+  - Fixed duplicate content issue
+  - Added `-e "HOST_INPUT_DIR=${INPUT_DIR}"` to pass host input path to container
+  - Ensured proper command structure
+
+### Key Changes:
+- Dual path mapping: Both input and output directories are mounted to sub-containers
+- Environment variables: `HOST_INPUT_DIR` and `HOST_OUTPUT_DIR` passed from host to container
+- Improved escaping: Proper handling of special characters in Nextflow config strings
+- Config structure: Preserved epi2me workflow's own containerOptions configuration
+
+### Impact:
+- Sub-containers can now access both input data and work files
+- Proper path mapping for all required directories
+- Better compatibility with epi2me workflow's internal mount configurations
+
+### Usage:
+When running docker manually, ensure to pass both HOST_INPUT_DIR and HOST_OUTPUT_DIR:
+```bash
+docker run --rm -it \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "${INPUT_DIR}:/data/input:ro" \
+  -v "${OUTPUT_DIR}:/data/output" \
+  -e "HOST_OUTPUT_DIR=${OUTPUT_DIR}" \
+  -e "HOST_INPUT_DIR=${INPUT_DIR}" \
+  nanopore-plasmid-pipeline:latest \
+  --input /data/input --output /data/output ...
+```
+
 ## 2025-12-13 - Fix Docker-in-Docker Path Mapping - Use HOST_OUTPUT_DIR Environment Variable
 
 ### Problem:
