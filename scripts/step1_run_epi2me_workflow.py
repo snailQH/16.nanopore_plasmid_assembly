@@ -50,7 +50,7 @@ def load_config(config_file):
     with open(config_file, 'r') as f:
         return yaml.safe_load(f)
 
-def generate_samplesheet(fast_pass_dir, output_file, logger=None):
+def generate_samplesheet(fast_pass_dir, output_file, work_dir=None, logger=None):
     """Generate samplesheet CSV for epi2me workflow."""
     if logger is None:
         logger = logging.getLogger('step1')
@@ -67,6 +67,10 @@ def generate_samplesheet(fast_pass_dir, output_file, logger=None):
         '--fast-pass', str(fast_pass_dir),
         '--out', str(output_file)
     ]
+    
+    # Add work-dir if provided (for read-only input directories)
+    if work_dir:
+        cmd.extend(['--work-dir', str(work_dir)])
     
     result = subprocess.run(cmd, capture_output=True, text=True)
     

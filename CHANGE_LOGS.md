@@ -2,6 +2,39 @@
 
 All changes, updates, and improvements to the Nanopore Plasmid Assembly Pipeline.
 
+## 2025-12-13 - Fix Read-Only File System Issue for Barcode Directory Creation
+
+### Problem:
+- When input directory is mounted as read-only (`:ro`), `generate_samplesheet.py` fails to create barcode directories
+- Error: `[Errno 30] Read-only file system: '/data/input/barcode01'`
+- Barcode directories need to be created for Nextflow workflow, but input directory is read-only
+
+### Solution:
+- Added `--work-dir` parameter to `generate_samplesheet.py` to specify where barcode directories should be created
+- Modified `step1_run_epi2me_workflow.py` to create a `fastq_processed` directory in output for barcode directories
+- Barcode directories are now created in output directory instead of input directory
+- Nextflow workflow uses the processed fastq directory if barcode directories exist there
+
+### Files Modified:
+- `scripts/generate_samplesheet.py`: 
+  - Added `work_dir` parameter to specify where barcode directories should be created
+  - Modified barcode directory creation logic to use `work_dir` if provided
+  - Added `--work-dir` command-line argument
+- `scripts/step1_run_epi2me_workflow.py`: 
+  - Modified `generate_samplesheet()` to accept and pass `work_dir` parameter
+  - Creates `fastq_processed` directory in output for barcode directories
+  - Uses processed fastq directory for Nextflow if barcode directories exist there
+
+### Key Changes:
+- Work directory: Creates `01.assembly/fastq_processed/` for barcode directories
+- Read-only support: Input directory can now be read-only
+- Automatic detection: Uses processed directory if barcode directories exist, otherwise uses original
+
+### Impact:
+- Supports read-only input directory mounting in Docker
+- Barcode directories created in writable output directory
+- No changes needed to Docker run command (works automatically)
+
 ## 2025-12-13 - Enable Assembly Step in Docker Container Mode
 
 ### Problem:

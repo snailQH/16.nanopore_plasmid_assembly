@@ -87,22 +87,34 @@ def merge_fastq_files(fastq_files, output_file):
         logging.error(f"Error merging FASTQ files: {e}")
         return None
 
-def generate_samplesheet(fast_pass_dir, output_file, approx_size=None, verbose=False):
+def generate_samplesheet(fast_pass_dir, output_file, approx_size=None, work_dir=None, verbose=False):
     """Generate samplesheet CSV from fast_pass directory structure.
     
     Args:
         fast_pass_dir: Path to fast_pass directory containing sample subdirectories
         output_file: Output samplesheet CSV file path
         approx_size: Optional approximate plasmid size (bp) to include in samplesheet
+        work_dir: Optional working directory for creating barcode directories (if fast_pass_dir is read-only)
         verbose: Enable verbose logging
     
     Note:
         epi2me wf-clone-validation requires barcode format: barcodeXX (e.g., barcode01, barcode02)
-        If subdirectories don't match this format, we create symbolic links with barcode names
+        If subdirectories don't match this format, we create barcode directories with merged files.
+        If work_dir is provided, barcode directories will be created there instead of in fast_pass_dir.
     """
     setup_logging(verbose)
     
     fast_pass_path = Path(fast_pass_dir)
+    
+    # Determine where to create barcode directories
+    # If work_dir is provided, use it; otherwise try to use fast_pass_dir
+    if work_dir:
+        barcode_base_path = Path(work_dir)
+        barcode_base_path.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Using work directory for barcode directories: {barcode_base_path}")
+    else:
+        barcode_base_path = fast_pass_path
+        logging.info(f"Using fast_pass directory for barcode directories: {barcode_base_path}")
     
     if not fast_pass_path.exists():
         raise FileNotFoundError(f"fast_pass directory not found: {fast_pass_dir}")
@@ -155,7 +167,8 @@ def generate_samplesheet(fast_pass_dir, output_file, approx_size=None, verbose=F
             logging.info(f"  {sample_id}: Creating barcode mapping -> {barcode}")
         
         # Create barcode directory and merge FASTQ files
-        barcode_dir = fast_pass_path / barcode
+        # Use barcode_base_path (work_dir if provided, otherwise fast_pass_path)
+        barcode_dir = barcode_base_path / barcode
         
         # If barcode matches sample_id, use existing directory
         # Otherwise, create new directory with merged files
